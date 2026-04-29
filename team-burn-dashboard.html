@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Burn Dashboard</title>
+<style>
+  :root {
+    --bg: #f9f8f6;
+    --surface: #ffffff;
+    --surface-alt: #f3f2ef;
+    --border: #e2e0da;
+    --border-strong: #c8c5bc;
+    --text: #1a1917;
+    --text-muted: #6b6860;
+    --text-faint: #9e9b94;
+    --blue: #1a56a0;
+    --blue-bg: #e8f0fb;
+    --green: #2d7a3a;
+    --green-bg: #e6f4e8;
+    --amber: #8a5a00;
+    --amber-bg: #fef3d0;
+    --red: #a82020;
+    --red-bg: #fdeaea;
+    --tgt-color: #1a56a0;
+    --tgt-bg: #e8f0fb;
+    --font: 'DM Sans', -apple-system, sans-serif;
+    --font-mono: 'DM Mono', 'Fira Mono', monospace;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  /* ── Layout ── */
+  .app { max-width: 1400px; margin: 0 auto; padding: 0 24px 48px; }
+
+  header {
+    padding: 28px 0 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+  header p { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 2px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font);
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.on { color: var(--text); border-bottom-color: var(--text); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px;
+    font-size: 13px; font-weight: 500; font-family: var(--font);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface-alt); }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
+  .btn.primary:hover { background: #333; }
+  .btn.danger:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+  .btn.sm { padding: 5px 10px; font-size: 12px; }
+  .btn.icon { padding: 6px 8px; }
+
+  /* ── Scenario bar ── */
+  .scenario-bar {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .scenario-bar label { font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .scen-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .scen-tab {
+    padding: 5px 12px; font-size: 13px; font-family: var(--font);
+    border: 1px solid var(--border); border-radius: 20px;
+    background: none; color: var(--text-muted); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .scen-tab:hover { border-color: var(--border-strong); color: var(--text); }
+  .scen-tab.on { background: var(--text); color: #fff; border-color: var(--text); }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex; gap: 16px; margin-bottom: 14px; flex-wrap: wrap;
+    font-size: 12px; color: var(--text-muted); align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+
+  /* ── Matrix table ── */
+  .matrix-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+
+  table.mx {
+    border-collapse: collapse;
+    min-width: 100%;
+    font-size: 13px;
+  }
+
+  table.mx th, table.mx td {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    text-align: center;
+    white-space: nowrap;
+  }
+  table.mx th:last-child, table.mx td:last-child { border-right: none; }
+  table.mx tr:last-child td { border-bottom: none; }
+
+  /* sticky row-header column */
+  table.mx th.rh, table.mx td.rh {
+    text-align: left;
+    position: sticky; left: 0; z-index: 3;
+    min-width: 140px; max-width: 160px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-right: 2px solid var(--border-strong);
+  }
+  table.mx th.rh { background: var(--surface-alt); z-index: 4; }
+
+  /* column headers */
+  table.mx thead th {
+    background: var(--surface-alt);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 10px 14px;
+    position: sticky; top: 0; z-index: 2;
+  }
+  table.mx thead th.rh { z-index: 5; }
+
+  /* client name headers — rotated for compactness, but we'll keep horizontal with truncation */
+  table.mx thead th.ch {
+    min-width: 90px;
+    max-width: 110px;
+    font-size: 11px;
+    padding: 10px 8px;
+    vertical-align: bottom;
+  }
+
+  /* data cells */
+  table.mx td.dc {
+    padding: 0;
+    min-width: 90px;
+  }
+  table.mx td.dc input[type=number] {
+    width: 100%;
+    height: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-family: var(--font-mono);
+    color: var(--text);
+    text-align: center;
+    outline: none;
+    -moz-appearance: textfield;
+  }
+  table.mx td.dc input[type=number]::-webkit-outer-spin-button,
+  table.mx td.dc input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  table.mx td.dc input[type=number]:focus {
+    background: var(--blue-bg);
+    box-shadow: inset 0 0 0 2px var(--blue);
+  }
+  table.mx td.dc input[type=number]:hover:not(:focus) { background: var(--surface-alt); }
+
+  /* retainer row */
+  tr.tr-ret td { background: #fafaf8; }
+  tr.tr-ret td.rh { font-weight: 600; font-size: 12px; color: var(--text-muted); background: #fafaf8; }
+  tr.tr-ret td.dc input[type=number] { font-family: var(--font); font-weight: 500; color: var(--blue); font-size: 13px; }
+
+  /* target hours row */
+  tr.tr-tgt td { background: var(--blue-bg); }
+  tr.tr-tgt td.rh { background: var(--blue-bg); font-weight: 600; font-size: 12px; color: var(--blue); }
+  tr.tr-tgt td.val { padding: 10px 8px; font-weight: 600; font-family: var(--font-mono); color: var(--blue); font-size: 13px; }
+
+  /* staff rows */
+  tr.staff-row:hover td { background: #fafaf9; }
+  tr.staff-row:hover td.rh { background: #fafaf9; }
+
+  /* staff name cell */
+  .staff-name { font-weight: 600; font-size: 13px; }
+  .staff-role { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+  /* pill badges */
+  .pill {
+    display: inline-flex; align-items: center;
+    padding: 3px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+  }
+  .pill.pg { background: var(--green-bg); color: var(--green); }
+  .pill.pa { background: var(--amber-bg); color: var(--amber); }
+  .pill.pr { background: var(--red-bg); color: var(--red); }
+  .pill.pb { background: var(--blue-bg); color: var(--blue); }
+
+  /* totals row */
+  tr.tr-tot td { background: var(--surface-alt); border-top: 2px solid var(--border-strong); }
+  tr.tr-tot td.rh { font-weight: 600; background: var(--surface-alt); }
+  tr.tr-tot td.val {
+    padding: 10px 8px;
+    font-weight: 700; font-family: var(--font-mono);
+    font-size: 13px;
+  }
+  tr.tr-tot td.over { background: var(--amber-bg); }
+  tr.tr-tot td.under { background: var(--green-bg); }
+
+  .var-badge { font-size: 10px; font-weight: 500; margin-left: 3px; }
+  .var-pos { color: var(--amber); }
+  .var-neg { color: var(--green); }
+
+  /* burn rows */
+  tr.tr-burn td { border-top: 1px solid var(--border); }
+  tr.tr-burn:first-of-type td { border-top: 2px solid var(--border-strong); }
+  tr.tr-burn td.rh { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  tr.tr-burn td.val { padding: 8px 8px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  tr.tr-burn td.val.neg { color: var(--red); font-weight: 600; }
+  tr.tr-burn td.val.pos { color: var(--green); font-weight: 600; }
+  tr.tr-burn td.val.nil { color: var(--text-faint); }
+
+  /* actual hours row */
+  tr.tr-actual td { background: #fafafa; }
+  tr.tr-actual td.rh { font-size: 12px; color: var(--text-muted); font-weight: 500; background: #fafafa; }
+  tr.tr-actual td.dc input[type=number] { font-size: 12px; color: var(--text-muted); }
+
+  /* inline stat cells (% alloc, # accts) */
+  td.stat { padding: 10px 12px; }
+
+  /* ── KPI cards ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+  }
+  .kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; line-height: 1; }
+  .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+  .kpi.danger { border-color: var(--red); background: var(--red-bg); }
+  .kpi.danger .kpi-value { color: var(--red); }
+
+  /* ── Two-col layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 22px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Bar charts ── */
+  .bar-row { margin-bottom: 12px; }
+  .bar-row:last-child { margin-bottom: 0; }
+  .bar-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .bar-name { font-size: 13px; font-weight: 500; }
+  .bar-meta { font-size: 12px; color: var(--text-muted); }
+  .bar-track { height: 7px; background: var(--surface-alt); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+
+  /* ── Client reference table ── */
+  .client-table { width: 100%; border-collapse: collapse; }
+  .client-table th {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text-muted);
+    padding: 6px 10px 8px; text-align: right; border-bottom: 1px solid var(--border);
+  }
+  .client-table th:first-child { text-align: left; }
+  .client-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; text-align: right; }
+  .client-table td:first-child { text-align: left; font-weight: 500; }
+  .client-table tr:last-child td { border-bottom: none; }
+  .client-table tr:hover td { background: var(--surface-alt); }
+  .num { font-family: var(--font-mono); }
+
+  /* ── Setup forms ── */
+  .setup-section { margin-bottom: 24px; }
+  .setup-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .setup-header h3 { font-size: 14px; font-weight: 600; }
+  .setup-header .hint { font-size: 12px; color: var(--text-muted); }
+
+  .setup-grid {
+    display: grid;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .setup-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 90px 120px 36px;
+    gap: 0;
+    background: var(--surface);
+    align-items: center;
+  }
+  .setup-row.client-row {
+    grid-template-columns: 1fr 120px 100px 36px;
+  }
+  .setup-row.header {
+    background: var(--surface-alt);
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text-muted);
+  }
+  .setup-row.header > span { padding: 8px 12px; }
+
+  .setup-row input[type=text],
+  .setup-row input[type=number],
+  .setup-row select {
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    font-size: 13px;
+    font-family: var(--font);
+    background: transparent;
+    color: var(--text);
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .setup-row input:first-child,
+  .setup-row select:first-child { border-left: none; }
+  .setup-row input:focus, .setup-row select:focus { background: var(--blue-bg); }
+  .setup-row input[type=text] { font-weight: 500; }
+
+  .setup-row .del-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 100%; min-height: 40px;
+    border: none; border-left: 1px solid var(--border);
+    background: none; color: var(--text-faint);
+    cursor: pointer; font-size: 16px; transition: all 0.12s;
+  }
+  .setup-row .del-btn:hover { background: var(--red-bg); color: var(--red); }
+
+  .rate-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 16px; padding: 12px 16px;
+    background: var(--blue-bg); border: 1px solid #c0d4f0;
+    border-radius: var(--radius); font-size: 13px;
+  }
+  .rate-row label { font-weight: 500; color: var(--blue); }
+  .rate-row input {
+    width: 80px; padding: 6px 10px;
+    border: 1px solid #b0c8e8; border-radius: var(--radius);
+    font-size: 14px; font-weight: 600; font-family: var(--font-mono);
+    color: var(--blue); background: #fff; text-align: center;
+  }
+  .rate-row .hint { font-size: 12px; color: var(--blue); opacity: 0.7; }
+
+  /* ── Save/Load ── */
+  .persist-bar {
+    display: flex; gap: 8px; align-items: center;
+    padding: 12px 16px; margin-bottom: 20px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); flex-wrap: wrap;
+  }
+  .persist-bar span { font-size: 12px; color: var(--text-muted); margin-right: 4px; }
+  textarea.json-area {
+    width: 100%; margin-top: 10px;
+    padding: 10px 12px; min-height: 80px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-family: var(--font-mono); font-size: 11px;
+    background: var(--surface-alt); color: var(--text);
+    resize: vertical;
+  }
+
+  /* ── Utility ── */
+  .hidden { display: none !important; }
+  .text-right { text-align: right; }
+  .text-muted { color: var(--text-muted); }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <h1>Team Burn Dashboard</h1>
+      <p>Staff allocation, retainer targets, and monthly burn</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn sm" onclick="exportData()">↓ Export JSON</button>
+      <button class="btn sm primary" onclick="document.getElementById('import-area').classList.toggle('hidden')">↑ Import JSON</button>
+    </div>
+  </header>
+
+  <div id="import-area" class="hidden">
+    <textarea class="json-area" id="import-json" placeholder="Paste exported JSON here…"></textarea>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button class="btn sm primary" onclick="importData()">Load data</button>
+      <button class="btn sm" onclick="document.getElementById('import-area').classList.add('hidden')">Cancel</button>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab-btn on" onclick="showTab('matrix')">Matrix</button>
+    <button class="tab-btn" onclick="showTab('overview')">Overview</button>
+    <button class="tab-btn" onclick="showTab('clients')">Clients</button>
+    <button class="tab-btn" onclick="showTab('setup')">Setup</button>
+  </nav>
+
+  <!-- MATRIX TAB -->
+  <div id="tab-matrix">
+    <div class="scenario-bar">
+      <label>Scenario</label>
+      <div class="scen-tabs" id="scen-tabs"></div>
+      <button class="btn sm" onclick="cloneScenario()">+ Clone</button>
+      <button class="btn sm" onclick="renameScenario()">Rename</button>
+      <button class="btn sm danger" id="del-scen-btn" onclick="deleteScenario()">Delete</button>
+    </div>
+    <div class="legend">
+      <span>Allocated total vs target hours:</span>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--green-bg);border-color:#b2d9b6;"></span> At or under target</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--amber-bg);border-color:#f0d080;"></span> Over target</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--blue-bg);border-color:#b0c8e8;"></span> Target hrs (retainer ÷ rate)</div>
+    </div>
+    <div class="matrix-wrap">
+      <div id="matrix-table"></div>
+    </div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div id="tab-overview" class="hidden">
+    <div class="kpi-grid" id="kpis"></div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Staff utilization</div>
+        <div id="staff-bars"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Client burn <span class="text-muted" style="font-weight:400;text-transform:none;letter-spacing:0;">(sorted worst → best)</span></div>
+        <div id="burn-bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENTS TAB -->
+  <div id="tab-clients" class="hidden">
+    <div class="card">
+      <div class="card-title">Client burn reference — retainer vs. cost at $<span id="rate-disp">185</span>/hr blended</div>
+      <div id="client-ref"></div>
+    </div>
+  </div>
+
+  <!-- SETUP TAB -->
+  <div id="tab-setup" class="hidden">
+    <div class="setup-section">
+      <div class="setup-header">
+        <h3>Staff</h3>
+        <span class="hint">160 hrs for Leads · 136 hrs for Directors &amp; Managers</span>
+      </div>
+      <div class="rate-row">
+        <label>Blended billing rate</label>
+        <input type="number" id="global-rate" value="185" min="1" onchange="setGlobalRate(+this.value)">
+        <span>$/hr</span>
+        <span class="hint">— applies to all staff. Change individual rates below to override.</span>
+      </div>
+      <div class="setup-grid" id="staff-setup-grid"></div>
+      <button class="btn sm mt-8" onclick="addStaff()">+ Add person</button>
+    </div>
+
+    <div class="setup-section">
+      <div class="setup-header">
+        <h3>Clients</h3>
+        <span class="hint">Toggle inactive to hide from matrix</span>
+      </div>
+      <div class="setup-grid" id="client-setup-grid"></div>
+      <button class="btn sm mt-8" onclick="addClient()">+ Add client</button>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ─────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────
+function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
+
+const BASE_STAFF = [
+  {id:1, name:'Mark',      role:'Comms Lead', hrs:160, rate:185},
+  {id:2, name:'Greg',      role:'Comms Lead', hrs:160, rate:185},
+  {id:3, name:'Garin',     role:'Affiliate',  hrs:160, rate:185},
+  {id:4, name:'Mackenzie', role:'Acct Dir',   hrs:136, rate:185},
+  {id:5, name:'TBD',       role:'Acct Dir',   hrs:0,   rate:185},
+  {id:6, name:'Holly',     role:'Acct Mgr',   hrs:136, rate:185},
+  {id:7, name:'Andrew',    role:'Acct Mgr',   hrs:136, rate:185},
+  {id:8, name:'Cody',      role:'Acct Mgr',   hrs:136, rate:185},
+  {id:9, name:'John',      role:'Acct Mgr',   hrs:136, rate:185},
+];
+
+const BASE_CLIENTS = [
+  {id:1,  name:'24HF',            retainer:22000, active:true},
+  {id:2,  name:'Zwift',           retainer:16000, active:true},
+  {id:3,  name:'Canyon',          retainer:12000, active:true},
+  {id:4,  name:'Core',            retainer:5000,  active:true},
+  {id:5,  name:'Scott',           retainer:7500,  active:true},
+  {id:6,  name:'Nix',             retainer:5000,  active:true},
+  {id:7,  name:'WTB',             retainer:5000,  active:true},
+  {id:8,  name:'USA Cycling',     retainer:5000,  active:true},
+  {id:9,  name:'Roka',            retainer:5000,  active:true},
+  {id:10, name:'Sprokut',         retainer:5000,  active:true},
+  {id:11, name:'Slicks',          retainer:5000,  active:true},
+  {id:12, name:'PFB',             retainer:5000,  active:true},
+  {id:13, name:'Liv',             retainer:5000,  active:true},
+  {id:14, name:'MIPS',            retainer:5000,  active:true},
+  {id:15, name:'Canyon Support',  retainer:10000, active:true},
+  {id:16, name:'Colnago',         retainer:5000,  active:true},
+  {id:17, name:'Cadex',           retainer:5000,  active:true},
+  {id:18, name:'Canyon Affiliate',retainer:0,     active:true},
+  {id:19, name:'Scott Affiliate', retainer:0,     active:true},
+  {id:20, name:'Affiliate Dev',   retainer:0,     active:true},
+  {id:21, name:'Biz Dev/Mgmt',    retainer:0,     active:true},
+];
+
+const BASE_ALLOC = {
+  '1_3':13,'1_4':10,'1_5':5,'1_7':5,'1_8':5,'1_9':5,'1_10':5,'1_12':5,'1_14':5,'1_16':5,'1_17':5,'1_18':5,'1_21':56,
+  '2_1':30,'2_2':20,'2_3':15,'2_4':10,'2_6':5,'2_7':5,'2_8':5,'2_9':5,'2_13':5,'2_14':5,'2_15':10,'2_21':60,
+  '3_5':5,'3_10':5,'3_17':5,'3_18':45,'3_19':20,'3_20':48,
+  '4_1':29,'4_2':25,'4_6':16,'4_12':14,'4_13':26,'4_14':26,
+  '6_1':32,'6_5':16,'6_6':16,'6_9':28,'6_15':44,
+  '7_1':36,'7_2':30,'7_3':50,'7_4':20,
+  '8_2':37,'8_5':32,'8_11':12,'8_12':18,'8_16':27,'8_17':22,
+  '9_4':34,'9_7':34,'9_8':34,'9_10':34,
+};
+
+const BASE_ACTUAL = {
+  1:118.92, 2:86.49, 3:64.86, 4:27.03, 5:40.54, 6:27.03, 7:27.03, 8:27.03,
+  9:27.03, 10:27.03, 11:27.03, 12:27.03, 13:27.03, 14:27.03, 15:54.05,
+  16:27.03, 17:27.03, 18:45.0, 19:20.0, 20:0, 21:0
+};
+
+let scenarios = [{
+  name: 'Current',
+  staff: deepCopy(BASE_STAFF),
+  clients: deepCopy(BASE_CLIENTS),
+  alloc: Object.assign({}, BASE_ALLOC),
+  actual: Object.assign({}, BASE_ACTUAL)
+}];
+let cur = 0;
+let nextSid = 10, nextCid = 22;
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+const S = () => scenarios[cur];
+const ak = (sid, cid) => `${sid}_${cid}`;
+const activeClients = () => S().clients.filter(c => c.active);
+
+function blendedRate() {
+  const active = S().staff.filter(m => m.hrs > 0);
+  return active.length ? Math.round(active.reduce((s, m) => s + m.rate, 0) / active.length) : 185;
+}
+function targetHrs(cid) {
+  const c = S().clients.find(x => x.id === cid);
+  if (!c || !c.retainer) return null;
+  return Math.round(c.retainer / blendedRate());
+}
+function staffAlloc(sid) {
+  return activeClients().reduce((s, c) => s + (+S().alloc[ak(sid, c.id)] || 0), 0);
+}
+function clientAlloc(cid) {
+  return S().staff.reduce((s, m) => s + (+S().alloc[ak(m.id, cid)] || 0), 0);
+}
+function clientCost(cid) {
+  return S().staff.reduce((s, m) => s + (+S().alloc[ak(m.id, cid)] || 0) * m.rate, 0);
+}
+function burnHrs(cid) { return (+S().actual[cid] || 0) - clientAlloc(cid); }
+function burnDol(cid) {
+  const c = S().clients.find(x => x.id === cid);
+  return c ? (c.retainer - clientCost(cid)) : 0;
+}
+function burnPct(cid) {
+  const c = S().clients.find(x => x.id === cid);
+  return (c && c.retainer) ? burnDol(cid) / c.retainer * 100 : null;
+}
+function allocPct(sid) {
+  const m = S().staff.find(x => x.id === sid);
+  return (m && m.hrs) ? staffAlloc(sid) / m.hrs * 100 : 0;
+}
+function numAccts(sid) {
+  return activeClients().filter(c => (+S().alloc[ak(sid, c.id)] || 0) > 0).length;
+}
+
+function fmt$(n) { return '$' + Math.round(Math.abs(n)).toLocaleString(); }
+function fmtPct(n, d=1) { return n.toFixed(d) + '%'; }
+function loadColor(p) { return p > 105 ? '#c0392b' : p > 95 ? '#d4820a' : '#27692f'; }
+function pillClass(p) { return p > 105 ? 'pr' : p > 95 ? 'pa' : 'pg'; }
+
+// ─────────────────────────────────────────────
+// SCENARIOS
+// ─────────────────────────────────────────────
+function renderScenTabs() {
+  document.getElementById('scen-tabs').innerHTML = scenarios.map((s, i) =>
+    `<button class="scen-tab${i === cur ? ' on' : ''}" onclick="switchScenario(${i})">${s.name}</button>`
+  ).join('');
+  const db = document.getElementById('del-scen-btn');
+  db.disabled = scenarios.length <= 1;
+  db.style.opacity = scenarios.length <= 1 ? '0.4' : '1';
+}
+function switchScenario(i) { cur = i; renderScenTabs(); render(); }
+function cloneScenario() {
+  const name = prompt('New scenario name:', `Scenario ${scenarios.length}`);
+  if (!name) return;
+  scenarios.push({
+    name,
+    staff: deepCopy(S().staff),
+    clients: deepCopy(S().clients),
+    alloc: Object.assign({}, S().alloc),
+    actual: Object.assign({}, S().actual)
+  });
+  cur = scenarios.length - 1;
+  renderScenTabs(); render();
+}
+function renameScenario() {
+  const n = prompt('Rename scenario:', S().name);
+  if (n) { S().name = n; renderScenTabs(); }
+}
+function deleteScenario() {
+  if (scenarios.length <= 1) return;
+  if (!confirm(`Delete "${S().name}"?`)) return;
+  scenarios.splice(cur, 1);
+  cur = Math.min(cur, scenarios.length - 1);
+  renderScenTabs(); render();
+}
+
+// ─────────────────────────────────────────────
+// MATRIX
+// ─────────────────────────────────────────────
+function renderMatrix() {
+  const acs = activeClients();
+  const rate = blendedRate();
+  let h = '<table class="mx"><thead><tr>';
+
+  // Header row
+  h += `<th class="rh">Staff member</th>`;
+  h += `<th style="min-width:56px;padding:10px 12px;">Hrs</th>`;
+  h += `<th style="min-width:72px;padding:10px 12px;">% alloc</th>`;
+  h += `<th style="min-width:60px;padding:10px 8px;"># accts</th>`;
+  acs.forEach(c => {
+    h += `<th class="ch" title="${c.name}">${c.name.length > 10 ? c.name.slice(0, 9) + '…' : c.name}</th>`;
+  });
+  h += '</tr></thead><tbody>';
+
+  // Retainer row
+  h += `<tr class="tr-ret"><td class="rh">Retainer / mo <span style="font-weight:400;color:var(--text-faint);font-size:11px;">($${rate}/hr blended)</span></td>`;
+  h += `<td colspan="3" style="background:#fafaf8;"></td>`;
+  acs.forEach(c => {
+    if (!c.retainer) {
+      h += `<td class="dc" style="background:#fafaf8;"><input type="number" min="0" step="500" value="" placeholder="—" onchange="updRetainer(${c.id},this.value)"></td>`;
+    } else {
+      h += `<td class="dc"><input type="number" min="0" step="500" value="${c.retainer}" onchange="updRetainer(${c.id},this.value)"></td>`;
+    }
+  });
+  h += '</tr>';
+
+  // Target hours row
+  h += `<tr class="tr-tgt"><td class="rh">Target hrs <span style="font-weight:400;font-size:11px;">retainer ÷ rate</span></td>`;
+  h += `<td colspan="3" style="background:var(--blue-bg);"></td>`;
+  acs.forEach(c => {
+    const tgt = targetHrs(c.id);
+    h += `<td class="val">${tgt !== null ? tgt : '—'}</td>`;
+  });
+  h += '</tr>';
+
+  // Staff rows
+  S().staff.forEach(m => {
+    const tot = staffAlloc(m.id);
+    const pct = m.hrs > 0 ? tot / m.hrs * 100 : 0;
+    const pcl = pillClass(pct);
+    h += `<tr class="staff-row">`;
+    h += `<td class="rh"><div class="staff-name">${m.name}</div><div class="staff-role">${m.role}</div></td>`;
+    h += `<td class="stat" style="font-family:var(--font-mono);text-align:center;">${m.hrs}</td>`;
+    h += `<td class="stat"><span class="pill ${pcl}">${fmtPct(pct)}</span></td>`;
+    h += `<td class="stat" style="text-align:center;font-family:var(--font-mono);">${numAccts(m.id)}</td>`;
+    acs.forEach(c => {
+      const v = S().alloc[ak(m.id, c.id)] || '';
+      h += `<td class="dc"><input type="number" min="0" max="999" step="1" value="${v}" placeholder="—" onchange="upAlloc(${m.id},${c.id},this.value)"></td>`;
+    });
+    h += '</tr>';
+  });
+
+  // Allocated total row
+  h += `<tr class="tr-tot"><td class="rh">Allocated total</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const alloc = clientAlloc(c.id);
+    const tgt = targetHrs(c.id);
+    const diff = tgt !== null ? alloc - tgt : null;
+    const cls = tgt !== null ? (alloc > tgt ? ' over' : ' under') : '';
+    const diffStr = diff !== null
+      ? `<span class="var-badge ${diff > 0 ? 'var-pos' : 'var-neg'}">${diff > 0 ? '+' : ''}${diff}</span>`
+      : '';
+    h += `<td class="val${cls}">${alloc}${diffStr}</td>`;
+  });
+  h += '</tr>';
+
+  // Actual paid hours
+  h += `<tr class="tr-actual"><td class="rh">Actual paid hrs</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const v = S().actual[c.id];
+    const vStr = (v !== undefined && v !== null && +v !== 0) ? (+v).toFixed(2) : '';
+    h += `<td class="dc"><input type="number" min="0" step="0.01" value="${vStr}" placeholder="—" onchange="upActual(${c.id},this.value)"></td>`;
+  });
+  h += '</tr>';
+
+  // Burn rows
+  h += `<tr class="tr-burn"><td class="rh">Monthly burn (hrs)</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const b = burnHrs(c.id);
+    const cls = b > 0 ? 'neg' : 'pos';
+    h += `<td class="val ${cls}">${b > 0 ? '+' : ''}${b.toFixed(1)}</td>`;
+  });
+  h += '</tr>';
+
+  h += `<tr class="tr-burn"><td class="rh">Monthly burn ($)</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const cl = S().clients.find(x => x.id === c.id);
+    if (!cl.retainer) { h += `<td class="val nil">—</td>`; return; }
+    const b = burnDol(c.id);
+    h += `<td class="val ${b < 0 ? 'neg' : 'pos'}">${b >= 0 ? '+' : '-'}${fmt$(b)}</td>`;
+  });
+  h += '</tr>';
+
+  h += `<tr class="tr-burn"><td class="rh">Monthly burn (%)</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const b = burnPct(c.id);
+    if (b === null) { h += `<td class="val nil">—</td>`; return; }
+    h += `<td class="val ${b < 0 ? 'neg' : 'pos'}">${b >= 0 ? '+' : ''}${fmtPct(b)}</td>`;
+  });
+  h += '</tr>';
+
+  h += '</tbody></table>';
+  document.getElementById('matrix-table').innerHTML = h;
+}
+
+// ─────────────────────────────────────────────
+// OVERVIEW
+// ─────────────────────────────────────────────
+function renderOverview() {
+  const acs = activeClients();
+  const totRet = acs.filter(c => c.retainer > 0).reduce((s, c) => s + c.retainer, 0);
+  const totCost = acs.reduce((s, c) => s + clientCost(c.id), 0);
+  const totAlloc = S().staff.reduce((s, m) => s + staffAlloc(m.id), 0);
+  const totHrs = S().staff.reduce((s, m) => s + m.hrs, 0);
+  const util = totHrs ? totAlloc / totHrs * 100 : 0;
+  const margin = totRet - totCost;
+  const marginPct = totRet ? margin / totRet * 100 : 0;
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Team capacity</div>
+      <div class="kpi-value">${totHrs} <span style="font-size:16px;font-weight:400;">hrs</span></div>
+      <div class="kpi-sub">${S().staff.filter(m => m.hrs > 0).length} staff · ${totAlloc} allocated</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Utilization</div>
+      <div class="kpi-value">${fmtPct(util)}</div>
+      <div class="kpi-sub">${acs.filter(c => c.retainer > 0).length} billed clients</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Monthly retainer</div>
+      <div class="kpi-value">${fmt$(totRet)}</div>
+      <div class="kpi-sub">Hours cost ${fmt$(totCost)}</div>
+    </div>
+    <div class="kpi${margin < 0 ? ' danger' : ''}">
+      <div class="kpi-label">Margin</div>
+      <div class="kpi-value">${margin >= 0 ? '+' : '-'}${fmt$(margin)}</div>
+      <div class="kpi-sub">${fmtPct(marginPct)} of retainer</div>
+    </div>`;
+
+  document.getElementById('staff-bars').innerHTML = S().staff.map(m => {
+    if (!m.hrs) return `<div class="bar-row"><div class="bar-label"><span class="bar-name" style="color:var(--text-muted);">${m.name}</span><span class="bar-meta">unassigned</span></div></div>`;
+    const pct = allocPct(m.id);
+    const col = loadColor(pct);
+    return `<div class="bar-row">
+      <div class="bar-label">
+        <span class="bar-name">${m.name} <span class="text-muted" style="font-size:12px;font-weight:400;">${m.role}</span></span>
+        <span class="bar-meta">${fmtPct(pct)} · ${numAccts(m.id)} accts · ${staffAlloc(m.id)}/${m.hrs} hrs</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct, 100)}%;background:${col};"></div></div>
+    </div>`;
+  }).join('');
+
+  const burnItems = acs.filter(c => c.retainer > 0).sort((a, b) => burnPct(a.id) - burnPct(b.id));
+  document.getElementById('burn-bars').innerHTML = burnItems.map(c => {
+    const bp = burnPct(c.id);
+    const bh = burnHrs(c.id);
+    const pcl = pillClass(bp || 0);
+    return `<div class="bar-row">
+      <div class="bar-label">
+        <span class="bar-name">${c.name}</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="bar-meta">${bh.toFixed(0)} hrs</span>
+          <span class="pill ${pcl}">${bp !== null ? (bp >= 0 ? '+' : '') + fmtPct(bp) : '—'}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// CLIENTS TAB
+// ─────────────────────────────────────────────
+function renderClients() {
+  const rate = blendedRate();
+  const el = document.getElementById('rate-disp');
+  if (el) el.textContent = rate;
+
+  const acs = activeClients().filter(c => c.retainer > 0);
+  let h = `<table class="client-table">
+    <thead><tr>
+      <th>Client</th>
+      <th>Retainer</th>
+      <th>Target hrs</th>
+      <th>Allocated</th>
+      <th>Variance</th>
+      <th>Cost/mo</th>
+      <th>Burn ($)</th>
+      <th>Burn (%)</th>
+    </tr></thead><tbody>`;
+
+  acs.forEach(c => {
+    const tgt = targetHrs(c.id);
+    const alloc = clientAlloc(c.id);
+    const diff = tgt !== null ? alloc - tgt : null;
+    const cost = clientCost(c.id);
+    const bd = burnDol(c.id);
+    const bp = burnPct(c.id);
+    const pcl = pillClass(bp || 0);
+
+    h += `<tr>
+      <td>${c.name}</td>
+      <td class="num">${fmt$(c.retainer)}</td>
+      <td class="num" style="color:var(--blue);font-weight:600;">${tgt !== null ? tgt : '—'}</td>
+      <td class="num">${alloc}</td>
+      <td class="num ${diff !== null ? (diff > 0 ? 'var-pos' : 'var-neg') : ''}" style="font-weight:600;">${diff !== null ? (diff > 0 ? '+' : '') + diff : '—'}</td>
+      <td class="num">${fmt$(cost)}</td>
+      <td class="num ${bd < 0 ? 'var-pos' : 'var-neg'}" style="font-weight:600;">${bd >= 0 ? '+' : '-'}${fmt$(bd)}</td>
+      <td><span class="pill ${pcl}">${bp !== null ? (bp >= 0 ? '+' : '') + fmtPct(bp) : '—'}</span></td>
+    </tr>`;
+  });
+  h += '</tbody></table>';
+  document.getElementById('client-ref').innerHTML = h;
+}
+
+// ─────────────────────────────────────────────
+// SETUP
+// ─────────────────────────────────────────────
+function renderSetup() {
+  // Staff
+  let sh = `<div class="setup-row header">
+    <span>Name / role</span><span>Hrs/mo</span><span>Rate ($/hr)</span><span>Position</span><span></span>
+  </div>`;
+  S().staff.forEach(m => {
+    sh += `<div class="setup-row">
+      <input type="text" value="${m.name}" onchange="upStaff(${m.id},'name',this.value)" placeholder="Name">
+      <input type="number" value="${m.hrs}" min="0" onchange="upStaff(${m.id},'hrs',+this.value)" placeholder="136">
+      <input type="number" value="${m.rate}" min="1" onchange="upStaff(${m.id},'rate',+this.value)" placeholder="185">
+      <input type="text" value="${m.role}" onchange="upStaff(${m.id},'role',this.value)" placeholder="Role">
+      <button class="del-btn" onclick="delStaff(${m.id})" title="Remove">×</button>
+    </div>`;
+  });
+  document.getElementById('staff-setup-grid').innerHTML = sh;
+
+  // Clients
+  let ch = `<div class="setup-row client-row header">
+    <span>Client name</span><span>Retainer/mo</span><span>Status</span><span></span>
+  </div>`;
+  S().clients.forEach(c => {
+    ch += `<div class="setup-row client-row">
+      <input type="text" value="${c.name}" onchange="upClient(${c.id},'name',this.value)" placeholder="Client name">
+      <input type="number" value="${c.retainer}" min="0" step="500" onchange="upClient(${c.id},'retainer',+this.value)" placeholder="5000">
+      <select onchange="upClient(${c.id},'active',this.value==='true')">
+        <option value="true" ${c.active ? 'selected' : ''}>Active</option>
+        <option value="false" ${!c.active ? 'selected' : ''}>Inactive</option>
+      </select>
+      <button class="del-btn" onclick="delClient(${c.id})" title="Remove">×</button>
+    </div>`;
+  });
+  document.getElementById('client-setup-grid').innerHTML = ch;
+
+  const gr = document.getElementById('global-rate');
+  if (gr) gr.value = blendedRate();
+}
+
+// ─────────────────────────────────────────────
+// MUTATIONS
+// ─────────────────────────────────────────────
+function updRetainer(cid, val) {
+  const c = S().clients.find(x => x.id === cid);
+  if (c) c.retainer = +val || 0;
+  render();
+}
+function upAlloc(sid, cid, val) {
+  const n = +val || 0;
+  const k = ak(sid, cid);
+  if (n === 0) delete S().alloc[k]; else S().alloc[k] = n;
+  render();
+}
+function upActual(cid, val) { S().actual[cid] = +val || 0; render(); }
+function upStaff(id, key, val) {
+  const m = S().staff.find(x => x.id === id);
+  if (m) m[key] = val;
+  render();
+}
+function delStaff(id) {
+  if (!confirm('Remove this person?')) return;
+  S().staff = S().staff.filter(x => x.id !== id);
+  render();
+}
+function addStaff() {
+  const id = nextSid++;
+  S().staff.push({ id, name: 'New', role: 'Acct Mgr', hrs: 136, rate: 185 });
+  // Initialize alloc entries for all existing clients (0 = no hours assigned)
+  S().clients.forEach(c => {
+    const k = id + '_' + c.id;
+    if (!(k in S().alloc)) S().alloc[k] = 0;
+  });
+  render();
+}
+function upClient(id, key, val) {
+  const c = S().clients.find(x => x.id === id);
+  if (c) c[key] = val;
+  render();
+}
+function delClient(id) {
+  if (!confirm('Remove this client?')) return;
+  S().clients = S().clients.filter(x => x.id !== id);
+  render();
+}
+function addClient() {
+  const id = nextCid++;
+  S().clients.push({ id, name: 'New client', retainer: 5000, active: true });
+  S().actual[id] = 0;
+  // Initialize alloc entries for all existing staff (0 = no hours assigned)
+  S().staff.forEach(m => {
+    const k = m.id + '_' + id;
+    if (!(k in S().alloc)) S().alloc[k] = 0;
+  });
+  render();
+}
+function setGlobalRate(r) {
+  S().staff.forEach(m => m.rate = r);
+  render();
+}
+
+// ─────────────────────────────────────────────
+// PERSIST
+// ─────────────────────────────────────────────
+function exportData() {
+  const json = JSON.stringify({ scenarios, cur, nextSid, nextCid }, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `burn-dashboard-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+}
+function importData() {
+  try {
+    const data = JSON.parse(document.getElementById('import-json').value);
+    scenarios = data.scenarios;
+    cur = data.cur || 0;
+    nextSid = data.nextSid || 20;
+    nextCid = data.nextCid || 30;
+    document.getElementById('import-area').classList.add('hidden');
+    renderScenTabs();
+    render();
+  } catch(e) {
+    alert('Invalid JSON — please check your export file.');
+  }
+}
+
+// ─────────────────────────────────────────────
+// TABS & RENDER
+// ─────────────────────────────────────────────
+const TABS = ['matrix', 'overview', 'clients', 'setup'];
+
+function showTab(t) {
+  TABS.forEach(id => {
+    document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== t);
+  });
+  document.querySelectorAll('.tab-btn').forEach((el, i) => {
+    el.classList.toggle('on', TABS[i] === t);
+  });
+}
+
+function render() {
+  renderMatrix();
+  renderOverview();
+  renderClients();
+  renderSetup();
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+renderScenTabs();
+render();
+</script>
+</body>
+</html>
