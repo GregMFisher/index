@@ -265,7 +265,7 @@
   td.stat { padding: 10px 12px; }
 
   /* ── KPI cards ── */
-  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
   .kpi {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -541,15 +541,15 @@
 function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
 const BASE_STAFF = [
-  {id:1, name:'Mark',      role:'Comms Lead', hrs:160, rate:185},
-  {id:2, name:'Greg',      role:'Comms Lead', hrs:160, rate:185},
-  {id:3, name:'Garin',     role:'Affiliate',  hrs:160, rate:185},
-  {id:4, name:'Mackenzie', role:'Acct Dir',   hrs:136, rate:185},
-  {id:5, name:'TBD',       role:'Acct Dir',   hrs:0,   rate:185},
-  {id:6, name:'Holly',     role:'Acct Mgr',   hrs:136, rate:185},
-  {id:7, name:'Andrew',    role:'Acct Mgr',   hrs:136, rate:185},
-  {id:8, name:'Cody',      role:'Acct Mgr',   hrs:136, rate:185},
-  {id:9, name:'John',      role:'Acct Mgr',   hrs:136, rate:185},
+  {id:1, name:'Mark',      role:'Comms Lead', hrs:160, rate:185, salary:0},
+  {id:2, name:'Greg',      role:'Comms Lead', hrs:160, rate:185, salary:200000},
+  {id:3, name:'Garin',     role:'Affiliate',  hrs:160, rate:185, salary:150000},
+  {id:4, name:'Mackenzie', role:'Acct Dir',   hrs:136, rate:185, salary:100000},
+  {id:5, name:'TBD',       role:'Acct Dir',   hrs:0,   rate:185, salary:100000},
+  {id:6, name:'Holly',     role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
+  {id:7, name:'Andrew',    role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
+  {id:8, name:'Cody',      role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
+  {id:9, name:'John',      role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
 ];
 
 const BASE_CLIENTS = [
@@ -614,6 +614,46 @@ function blendedRate() {
   const active = S().staff.filter(m => m.hrs > 0);
   return active.length ? Math.round(active.reduce((s, m) => s + m.rate, 0) / active.length) : 185;
 }
+// ── Cost & margin helpers ──
+const OVERHEAD = 0.20; // CA employer burden on payroll
+const MARGIN_TARGET = 0.20; // 20% gross margin north star
+
+function staffHourlyCost(m) {
+  // fully loaded hourly cost = (annual salary × (1+overhead)) / 12 / monthly hrs
+  if (!m.hrs || !m.salary) return 0;
+  return (m.salary * (1 + OVERHEAD)) / 12 / m.hrs;
+}
+function clientTrueCost(cid) {
+  // sum of (hours × fully loaded hourly cost) across all staff
+  return S().staff.reduce((sum, m) => {
+    const hrs = +S().alloc[ak(m.id, cid)] || 0;
+    return sum + hrs * staffHourlyCost(m);
+  }, 0);
+}
+function clientGrossMargin(cid) {
+  const c = S().clients.find(x => x.id === cid);
+  if (!c || !c.retainer) return null;
+  return (c.retainer - clientTrueCost(cid)) / c.retainer * 100;
+}
+function clientTargetRetainer(cid) {
+  // retainer needed to hit MARGIN_TARGET given current hours & staff costs
+  const cost = clientTrueCost(cid);
+  return cost > 0 ? Math.round(cost / (1 - MARGIN_TARGET)) : 0;
+}
+function totalAgencyCost() {
+  // total fully loaded monthly cost across all staff (including unallocated time)
+  return S().staff.reduce((sum, m) => {
+    if (!m.salary) return sum;
+    return sum + (m.salary * (1 + OVERHEAD)) / 12;
+  }, 0);
+}
+function marginPillClass(pct) {
+  if (pct === null) return 'pn';
+  if (pct >= MARGIN_TARGET * 100) return 'pg';
+  if (pct >= 0) return 'pa';
+  return 'pr';
+}
+
 function targetHrs(cid) {
   const c = S().clients.find(x => x.id === cid);
   if (!c || !c.retainer) return null;
@@ -792,6 +832,38 @@ function renderMatrix() {
   });
   h += '</tr>';
 
+  // ── Margin rows ──
+  h += `<tr class="tr-burn" style="border-top:2px solid var(--border-strong);"><td class="rh" style="color:var(--text);font-weight:600;">True cost (loaded)</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const cost = clientTrueCost(c.id);
+    const cl = S().clients.find(x => x.id === c.id);
+    if (!cl.retainer) { h += `<td class="val nil">—</td>`; return; }
+    h += `<td class="val" style="color:var(--text-muted);">$${Math.round(cost).toLocaleString()}</td>`;
+  });
+  h += '</tr>';
+
+  h += `<tr class="tr-burn"><td class="rh" style="color:var(--text);font-weight:600;">Gross margin</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const gm = clientGrossMargin(c.id);
+    if (gm === null) { h += `<td class="val nil">—</td>`; return; }
+    const cls = gm >= 20 ? 'pos' : gm >= 0 ? '' : 'neg';
+    const style = gm >= 0 && gm < 20 ? 'color:var(--amber);font-weight:600;' : '';
+    h += `<td class="val ${cls}" style="${style}">${fmtPct(gm)}</td>`;
+  });
+  h += '</tr>';
+
+  h += `<tr class="tr-burn"><td class="rh" style="color:var(--blue);font-weight:600;">Target retainer (20%)</td><td colspan="3"></td>`;
+  acs.forEach(c => {
+    const cl = S().clients.find(x => x.id === c.id);
+    if (!cl.retainer) { h += `<td class="val nil">—</td>`; return; }
+    const tgt = clientTargetRetainer(c.id);
+    const current = cl.retainer;
+    const diff = current - tgt;
+    const cls = diff >= 0 ? 'pos' : 'neg';
+    h += `<td class="val ${cls}" style="font-size:10px;">$${tgt.toLocaleString()}<br><span style="font-weight:400;">${diff >= 0 ? '+' : ''}$${Math.round(diff).toLocaleString()}</span></td>`;
+  });
+  h += '</tr>';
+
   h += '</tbody></table>';
   document.getElementById('matrix-table').innerHTML = h;
 }
@@ -809,6 +881,8 @@ function renderOverview() {
   const margin = totRet - totCost;
   const marginPct = totRet ? margin / totRet * 100 : 0;
 
+  const trueCostTotal = activeClients().reduce((s,c) => s + clientTrueCost(c.id), 0);
+  const agencyGM = totRet > 0 ? (totRet - trueCostTotal) / totRet * 100 : 0;
   document.getElementById('kpis').innerHTML = `
     <div class="kpi">
       <div class="kpi-label">Team capacity</div>
@@ -823,10 +897,15 @@ function renderOverview() {
     <div class="kpi">
       <div class="kpi-label">Monthly retainer</div>
       <div class="kpi-value">${fmt$(totRet)}</div>
-      <div class="kpi-sub">Hours cost ${fmt$(totCost)}</div>
+      <div class="kpi-sub">Team cost $${Math.round(totalAgencyCost()).toLocaleString()}/mo</div>
+    </div>
+    <div class="kpi${agencyGM < 20 ? ' danger' : ''}">
+      <div class="kpi-label">True gross margin</div>
+      <div class="kpi-value">${fmtPct(agencyGM)}</div>
+      <div class="kpi-sub">${agencyGM >= 20 ? '✓ Above' : '✗ Below'} 20% target</div>
     </div>
     <div class="kpi${margin < 0 ? ' danger' : ''}">
-      <div class="kpi-label">Margin</div>
+      <div class="kpi-label">Billing margin</div>
       <div class="kpi-value">${margin >= 0 ? '+' : '-'}${fmt$(margin)}</div>
       <div class="kpi-sub">${fmtPct(marginPct)} of retainer</div>
     </div>`;
@@ -874,11 +953,12 @@ function renderClients() {
     <thead><tr>
       <th>Client</th>
       <th>Retainer</th>
+      <th>True cost</th>
+      <th>Gross margin</th>
+      <th>Target retainer</th>
+      <th>Gap to 20%</th>
       <th>Target hrs</th>
-      <th>Allocated</th>
-      <th>Variance</th>
-      <th>Cost/mo</th>
-      <th>Burn ($)</th>
+      <th>Alloc</th>
       <th>Burn (%)</th>
     </tr></thead><tbody>`;
 
@@ -886,20 +966,24 @@ function renderClients() {
     const tgt = targetHrs(c.id);
     const alloc = clientAlloc(c.id);
     const diff = tgt !== null ? alloc - tgt : null;
-    const cost = clientCost(c.id);
-    const bd = burnDol(c.id);
     const bp = burnPct(c.id);
-    const pcl = pillClass(bp || 0);
+    const trueCost = clientTrueCost(c.id);
+    const gm = clientGrossMargin(c.id);
+    const targetRet = clientTargetRetainer(c.id);
+    const gap = c.retainer - targetRet;
+    const gmCl = gm === null ? '' : gm >= 20 ? 'var-neg' : gm >= 0 ? '' : 'var-pos';
+    const gmStyle = gm !== null && gm >= 0 && gm < 20 ? 'color:var(--amber);font-weight:600;' : 'font-weight:600;';
 
     h += `<tr>
       <td>${c.name}</td>
-      <td class="num">${fmt$(c.retainer)}</td>
-      <td class="num" style="color:var(--blue);font-weight:600;">${tgt !== null ? tgt : '—'}</td>
+      <td class="num">${c.retainer > 0 ? fmt$(c.retainer) : '—'}</td>
+      <td class="num">${trueCost > 0 ? '$'+Math.round(trueCost).toLocaleString() : '—'}</td>
+      <td class="num ${gmCl}" style="${gmStyle}">${gm !== null && c.retainer > 0 ? fmtPct(gm) : '—'}</td>
+      <td class="num" style="color:var(--blue);font-weight:600;">${targetRet > 0 ? '$'+targetRet.toLocaleString() : '—'}</td>
+      <td class="num ${gap >= 0 ? 'var-neg' : 'var-pos'}" style="font-weight:600;">${c.retainer > 0 ? (gap >= 0 ? '+' : '') + '$'+Math.round(gap).toLocaleString() : '—'}</td>
+      <td class="num" style="color:var(--blue);">${tgt !== null ? tgt : '—'}</td>
       <td class="num">${alloc}</td>
-      <td class="num ${diff !== null ? (diff > 0 ? 'var-pos' : 'var-neg') : ''}" style="font-weight:600;">${diff !== null ? (diff > 0 ? '+' : '') + diff : '—'}</td>
-      <td class="num">${fmt$(cost)}</td>
-      <td class="num ${bd < 0 ? 'var-pos' : 'var-neg'}" style="font-weight:600;">${bd >= 0 ? '+' : '-'}${fmt$(bd)}</td>
-      <td><span class="pill ${pcl}">${bp !== null ? (bp >= 0 ? '+' : '') + fmtPct(bp) : '—'}</span></td>
+      <td><span class="pill ${marginPillClass(gm)}">${gm !== null && c.retainer > 0 ? (gm >= 0 ? '+' : '') + fmtPct(gm) : '—'}</span></td>
     </tr>`;
   });
   h += '</tbody></table>';
@@ -911,14 +995,15 @@ function renderClients() {
 // ─────────────────────────────────────────────
 function renderSetup() {
   // Staff
-  let sh = `<div class="setup-row header">
-    <span>Name / role</span><span>Hrs/mo</span><span>Rate ($/hr)</span><span>Position</span><span></span>
+  let sh = `<div class="setup-row header" style="grid-template-columns:1fr 75px 75px 90px 90px 28px;">
+    <span>Name / role</span><span>Hrs/mo</span><span>Rate ($/hr)</span><span>Salary/yr</span><span>Position</span><span></span>
   </div>`;
   S().staff.forEach(m => {
-    sh += `<div class="setup-row">
+    sh += `<div class="setup-row" style="grid-template-columns:1fr 75px 75px 90px 90px 28px;">
       <input type="text" value="${m.name}" onchange="upStaff(${m.id},'name',this.value)" placeholder="Name">
       <input type="number" value="${m.hrs}" min="0" onchange="upStaff(${m.id},'hrs',+this.value)" placeholder="136">
       <input type="number" value="${m.rate}" min="1" onchange="upStaff(${m.id},'rate',+this.value)" placeholder="185">
+      <input type="number" value="${m.salary||0}" min="0" step="1000" onchange="upStaff(${m.id},'salary',+this.value)" placeholder="80000">
       <input type="text" value="${m.role}" onchange="upStaff(${m.id},'role',this.value)" placeholder="Role">
       <button class="del-btn" onclick="delStaff(${m.id})" title="Remove">×</button>
     </div>`;
@@ -977,7 +1062,7 @@ function delStaff(id) {
 }
 function addStaff() {
   const id = nextSid++;
-  S().staff.push({ id, name: 'New', role: 'Acct Mgr', hrs: 136, rate: 185 });
+  S().staff.push({ id, name: 'New', role: 'Acct Mgr', hrs: 136, rate: 185, salary: 80000 });
   // Initialize alloc entries for all existing clients (0 = no hours assigned)
   S().clients.forEach(c => {
     const k = id + '_' + c.id;
