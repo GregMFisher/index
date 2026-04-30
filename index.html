@@ -522,7 +522,11 @@
         <label>Blended billing rate</label>
         <input type="number" id="global-rate" value="185" min="1" onchange="setGlobalRate(+this.value)">
         <span>$/hr</span>
-        <span class="hint">— applies to all staff. Change individual rates below to override.</span>
+        <span style="margin-left:20px;width:1px;background:var(--border);align-self:stretch;"></span>
+        <label style="margin-left:20px;">Profit margin target</label>
+        <input type="number" id="margin-target" value="20" min="1" max="99" step="1" onchange="setMarginTarget(+this.value)" style="width:60px;">
+        <span>%</span>
+        <span class="hint">— used for gross margin coloring and target retainer calculations.</span>
       </div>
       <div class="setup-grid" id="staff-setup-grid"></div>
       <button class="btn sm mt-8" onclick="addStaff()">+ Add person</button>
@@ -604,7 +608,8 @@ let scenarios = [{
   staff: deepCopy(BASE_STAFF),
   clients: deepCopy(BASE_CLIENTS),
   alloc: Object.assign({}, BASE_ALLOC),
-  actual: Object.assign({}, BASE_ACTUAL)
+  actual: Object.assign({}, BASE_ACTUAL),
+  marginTarget: 0.20
 }];
 let cur = 0;
 let nextSid = 10, nextCid = 22;
@@ -622,7 +627,8 @@ function blendedRate() {
 }
 // ── Cost & margin helpers ──
 const OVERHEAD = 0.20; // CA employer burden on payroll
-const MARGIN_TARGET = 0.20; // 20% gross margin north star
+// Margin target is stored per-scenario in S().marginTarget
+const MT = () => S().marginTarget || 0.20;
 
 function staffHourlyCost(m) {
   // fully loaded hourly cost = (annual salary × (1+overhead)) / 12 / monthly hrs
@@ -646,7 +652,7 @@ function clientGrossMargin(cid) {
 function clientTargetRetainer(cid) {
   // retainer needed to hit MARGIN_TARGET given current hours & staff costs
   const cost = clientTrueCost(cid);
-  return cost > 0 ? Math.round(cost / (1 - MARGIN_TARGET)) : 0;
+  return cost > 0 ? Math.round(cost / (1 - MT())) : 0;
 }
 function totalAgencyCost() {
   // total fully loaded monthly cost across all staff (including unallocated time)
@@ -657,7 +663,7 @@ function totalAgencyCost() {
 }
 function marginPillClass(pct) {
   if (pct === null) return 'pn';
-  if (pct >= MARGIN_TARGET * 100) return 'pg';
+  if (pct >= MT() * 100) return 'pg';
   if (pct >= 0) return 'pa';
   return 'pr';
 }
@@ -669,7 +675,7 @@ function targetHrs(cid) {
 }
 function clientTargetRetainer20(cid) {
   const cost = clientTrueCost(cid);
-  return cost / 0.80; // retainer needed for 20% margin
+  return cost / (1 - MT()); // retainer needed to hit margin target
 }
 function staffAlloc(sid) {
   return activeClients().reduce((s, c) => s + (+S().alloc[ak(sid, c.id)] || 0), 0);
@@ -737,7 +743,8 @@ function cloneScenario() {
     staff: deepCopy(S().staff),
     clients: deepCopy(S().clients),
     alloc: Object.assign({}, S().alloc),
-    actual: Object.assign({}, S().actual)
+    actual: Object.assign({}, S().actual),
+    marginTarget: S().marginTarget || 0.20
   });
   cur = scenarios.length - 1;
   renderScenTabs(); render(); scheduleSave();
@@ -874,14 +881,15 @@ function renderMatrix() {
   acs.forEach(c => {
     const gm = clientGrossMargin(c.id);
     if (gm === null) { h += `<td class="val nil">—</td>`; return; }
-    const cls = gm >= 20 ? 'pos' : gm < 0 ? 'neg' : '';
-    const style = gm >= 0 && gm < 20 ? 'color:var(--amber);font-weight:600;' : '';
+    const mt100 = MT() * 100;
+    const cls = gm >= mt100 ? 'pos' : gm < 0 ? 'neg' : '';
+    const style = gm >= 0 && gm < mt100 ? 'color:var(--amber);font-weight:600;' : '';
     const gmLabel = gm <= -100 ? '< -100%' : fmtPct(gm);
     h += `<td class="val ${cls}" style="${style}">${gmLabel}</td>`;
   });
   h += '</tr>';
 
-  h += `<tr class="tr-burn"><td class="rh" style="color:var(--blue);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"What the retainer would need to be at current hours to hit exactly 20% gross margin.\">Target retainer (20%)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh" style="color:var(--blue);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"What the retainer would need to be at current hours to hit exactly 20% gross margin.\">Target retainer (${Math.round(MT()*100)}%)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const cl = S().clients.find(x => x.id === c.id);
     const tgt = clientTargetRetainer(c.id);
@@ -889,8 +897,8 @@ function renderMatrix() {
       // Zero-retainer: show what they'd need to charge for 20% margin
       const cost = clientTrueCost(c.id);
       if (cost > 0) {
-        const needed = Math.round(cost / 0.80);
-        h += `<td class="val neg" style="font-size:10px;">$${needed.toLocaleString()}<br><span style="font-weight:400;color:var(--text-faint);">to hit 20%</span></td>`;
+        const needed = Math.round(cost / (1 - MT()));
+        h += `<td class="val neg" style="font-size:10px;">$${needed.toLocaleString()}<br><span style="font-weight:400;color:var(--text-faint);">to hit ${Math.round(MT()*100)}%</span></td>`;
       } else {
         h += `<td class="val nil">—</td>`;
       }
@@ -1010,7 +1018,7 @@ function renderClients() {
     const gm = clientGrossMargin(c.id);
     const targetRet = clientTargetRetainer(c.id);
     const gap = c.retainer - targetRet;
-    const gmCl = gm === null ? '' : gm >= 20 ? 'var-neg' : gm >= 0 ? '' : 'var-pos';
+    const gmCl = gm === null ? '' : gm >= MT() * 100 ? 'var-neg' : gm >= 0 ? '' : 'var-pos';
     const gmStyle = gm !== null && gm >= 0 && gm < 20 ? 'color:var(--amber);font-weight:600;' : 'font-weight:600;';
 
     h += `<tr>
@@ -1068,6 +1076,8 @@ function renderSetup() {
 
   const gr = document.getElementById('global-rate');
   if (gr) gr.value = blendedRate();
+  const mt = document.getElementById('margin-target');
+  if (mt) mt.value = Math.round((S().marginTarget || 0.20) * 100);
 }
 
 // ─────────────────────────────────────────────
@@ -1137,6 +1147,10 @@ function addClient() {
 function setGlobalRate(r) {
   S().staff.forEach(m => m.rate = r);
   scheduleSave();
+  render();
+}
+function setMarginTarget(pct) {
+  S().marginTarget = Math.max(0.01, Math.min(0.99, pct / 100));
   render();
 }
 
