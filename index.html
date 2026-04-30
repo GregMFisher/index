@@ -448,6 +448,7 @@
     <div class="header-actions" style="display:flex;align-items:center;gap:10px;">
       <span id="sheet-status" class="sheet-status success">Connected to Google Sheets</span>
       <button class="btn sm" onclick="loadFromSheets()">↺ Reload Sheet</button>
+      <button class="btn sm" onclick="loadFromTabs()" title="Force reload from individual staff/clients/alloc/actual tabs, ignoring saved scenarios">↺ Reset from tabs</button>
       <button class="btn sm" onclick="exportData()">↓ Export JSON</button>
       <button class="btn sm" onclick="document.getElementById('import-area').classList.toggle('hidden')">↑ Import JSON</button>
     </div>
@@ -1179,26 +1180,71 @@ const BASE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/valu
 // ─────────────────────────────────────────────
 // SHEETS READ
 // ─────────────────────────────────────────────
+async function loadFromTabs() {
+  try {
+    const [staffRes, clientRes, allocRes, actualRes] = await Promise.all([
+      fetch(`${BASE_URL}/staff?key=${API_KEY}`),
+      fetch(`${BASE_URL}/clients?key=${API_KEY}`),
+      fetch(`${BASE_URL}/alloc?key=${API_KEY}`),
+      fetch(`${BASE_URL}/actual?key=${API_KEY}`)
+    ]);
+    const [staffData, clientData, allocData, actualData] = await Promise.all([
+      staffRes.json(), clientRes.json(), allocRes.json(), actualRes.json()
+    ]);
+    const staff = (staffData.values || []).slice(1).map(r => ({
+      id: +r[0], name: r[1] || '', role: r[2] || '', hrs: +r[3] || 0, rate: +r[4] || 185, salary: +r[5] || 0
+    })).filter(m => m.id);
+    const clients = (clientData.values || []).slice(1).map(r => ({
+      id: +r[0], name: r[1] || '', retainer: +r[2] || 0,
+      active: r[3] === 'TRUE' || r[3] === 'true' || r[3] === '1'
+    })).filter(c => c.id);
+    const alloc = {};
+    (allocData.values || []).slice(1).forEach(r => {
+      if (r[0] && r[1] && +r[2]) alloc[`${r[0]}_${r[1]}`] = +r[2];
+    });
+    const actual = {};
+    (actualData.values || []).slice(1).forEach(r => {
+      if (r[0]) actual[+r[0]] = +r[1] || 0;
+    });
+    if (staff.length === 0) {
+      showStatus('Staff tab is empty — check your Sheet', 'error');
+      return false;
+    }
+    const mt = (S().marginTarget) || 0.20;
+    const ov = (S().overhead) || 0.35;
+    scenarios[0] = { name: 'Current', staff, clients, alloc, actual, marginTarget: mt, overhead: ov };
+    scenarios = [scenarios[0]]; // reset to single current scenario
+    cur = 0;
+    nextSid = Math.max(...staff.map(m => m.id), 9) + 1;
+    nextCid = Math.max(...clients.map(c => c.id), 21) + 1;
+    renderScenTabs();
+    render();
+    showStatus('Loaded from Sheet tabs ✓', 'success');
+    return true;
+  } catch(e) {
+    console.error(e);
+    showStatus('Failed to load tabs — ' + e.message, 'error');
+    return false;
+  }
+}
+
 async function loadFromSheets() {
   showStatus('Loading from Google Sheets…', 'loading');
   try {
-    // First try to load full scenarios blob
     const scenRes = await fetch(`${BASE_URL}/scenarios?key=${API_KEY}`);
     if (!scenRes.ok) throw new Error(`HTTP ${scenRes.status}`);
     const scenData = await scenRes.json();
     const rows = (scenData.values || []).slice(1);
 
-    if (rows.length > 0 && rows[0][0]) {
-      // We have saved scenarios — restore them
+    if (rows.length > 0 && rows[0] && rows[0][0] && rows[0][0].trim().startsWith('{')) {
       try {
         const saved = JSON.parse(rows[0][0]);
-        // Only update if we got valid non-empty data
-        if (saved.scenarios && saved.scenarios.length > 0 && saved.scenarios[0].staff && saved.scenarios[0].staff.length > 0) {
+        if (saved.scenarios && saved.scenarios.length > 0 &&
+            saved.scenarios[0].staff && saved.scenarios[0].staff.length > 0) {
           scenarios = saved.scenarios;
-          cur = saved.cur || 0;
+          cur = Math.min(saved.cur || 0, scenarios.length - 1);
           nextSid = saved.nextSid || 20;
           nextCid = saved.nextCid || 30;
-          // Ensure overhead and marginTarget exist on all scenarios (backwards compat)
           scenarios.forEach(s => {
             if (!s.overhead) s.overhead = 0.35;
             if (!s.marginTarget) s.marginTarget = 0.20;
@@ -1209,81 +1255,22 @@ async function loadFromSheets() {
           return;
         }
       } catch(parseErr) {
-        console.warn('Scenarios parse failed, falling back to tab-by-tab load', parseErr);
+        console.warn('Scenarios parse failed, trying individual tabs', parseErr);
       }
     }
 
-    // Fallback: load from individual tabs (first run or if scenarios tab is empty)
-    const [staffRes, clientRes, allocRes, actualRes] = await Promise.all([
-      fetch(`${BASE_URL}/staff?key=${API_KEY}`),
-      fetch(`${BASE_URL}/clients?key=${API_KEY}`),
-      fetch(`${BASE_URL}/alloc?key=${API_KEY}`),
-      fetch(`${BASE_URL}/actual?key=${API_KEY}`)
-    ]);
-
-    const [staffData, clientData, allocData, actualData] = await Promise.all([
-      staffRes.json(), clientRes.json(), allocRes.json(), actualRes.json()
-    ]);
-
-    // Parse staff (skip header row)
-    const staff = (staffData.values || []).slice(1).map(r => ({
-      id: +r[0], name: r[1] || '', role: r[2] || '', hrs: +r[3] || 0, rate: +r[4] || 185, salary: +r[5] || 0
-    })).filter(m => m.id);
-
-    // Parse clients
-    const clients = (clientData.values || []).slice(1).map(r => ({
-      id: +r[0], name: r[1] || '', retainer: +r[2] || 0,
-      active: r[3] === 'TRUE' || r[3] === 'true' || r[3] === '1'
-    })).filter(c => c.id);
-
-    // Parse alloc
-    const alloc = {};
-    (allocData.values || []).slice(1).forEach(r => {
-      if (r[0] && r[1] && +r[2]) alloc[`${r[0]}_${r[1]}`] = +r[2];
-    });
-
-    // Parse actual
-    const actual = {};
-    (actualData.values || []).slice(1).forEach(r => {
-      if (r[0]) actual[+r[0]] = +r[1] || 0;
-    });
-
-    // Only update if we got real data — never overwrite good data with empty
-    if (staff.length === 0 && clients.length === 0) {
-      showStatus('Sheet appears empty — keeping current data', 'pending');
-      render();
-      return;
+    // Fallback to individual tabs
+    const ok = await loadFromTabs();
+    if (!ok) {
+      showStatus('Could not load data — check your Sheet', 'error');
     }
-
-    // Seed the Current scenario
-    scenarios[0] = { name: 'Current', staff, clients, alloc, actual, marginTarget: 0.20, overhead: 0.35 };
-    cur = 0;
-    nextSid = Math.max(...staff.map(m => m.id), nextSid) + 1;
-    nextCid = Math.max(...clients.map(c => c.id), nextCid) + 1;
-
-    renderScenTabs();
-    render();
-    showStatus('Loaded from Google Sheets', 'success');
   } catch(e) {
     console.error(e);
-    // On failure keep existing data — never wipe what's already loaded
     showStatus('Could not reach Sheets — showing last loaded data', 'pending');
     render();
   }
 }
 
-// ─────────────────────────────────────────────
-// SHEETS WRITE
-// ─────────────────────────────────────────────
-let saveTimer = null;
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveToSheets, 1500);
-  showStatus('Unsaved changes…', 'pending');
-}
-
-// Apps Script Web App URL — set this after deploying your Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby9-oxxmnkvqmNXA9RHMgNwWJBBW0J9nORX64GR79MFPj2DpK3HcIlCd_TRSGfPBFrq/exec';
 
 async function saveToSheets() {
   if (!APPS_SCRIPT_URL) {
