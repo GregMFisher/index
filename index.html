@@ -431,9 +431,9 @@
   .sheet-status.pending { background: var(--amber-bg); color: var(--amber); }
 
   /* ── Tooltips ── */
-  .rh-wrap { position: relative; display: inline-flex; align-items: center; gap: 5px; cursor: default; }
+  .rh-wrap { position: static; display: inline-flex; align-items: center; gap: 5px; cursor: default; }
   .rh-wrap .tip-icon { font-size: 10px; color: var(--text-faint); border: 1px solid var(--border); border-radius: 50%; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: help; }
-  .rh-wrap .tip-box { display: none; position: absolute; left: 0; top: 100%; margin-top: 4px; width: 240px; background: var(--text); color: #fff; font-size: 11px; line-height: 1.5; padding: 8px 10px; border-radius: var(--radius); z-index: 100; font-weight: 400; white-space: normal; pointer-events: none; }
+  .rh-wrap .tip-box { display: none; position: fixed; width: 240px; background: var(--text); color: #fff; font-size: 11px; line-height: 1.5; padding: 8px 10px; border-radius: var(--radius); z-index: 9999; font-weight: 400; white-space: normal; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .rh-wrap:hover .tip-box { display: block; }
 </style>
 </head>
@@ -728,7 +728,7 @@ function renderScenTabs() {
   db.disabled = scenarios.length <= 1;
   db.style.opacity = scenarios.length <= 1 ? '0.4' : '1';
 }
-function switchScenario(i) { cur = i; renderScenTabs(); render(); }
+function switchScenario(i) { cur = i; renderScenTabs(); render(); scheduleSave(); }
 function cloneScenario() {
   const name = prompt('New scenario name:', `Scenario ${scenarios.length}`);
   if (!name) return;
@@ -740,18 +740,18 @@ function cloneScenario() {
     actual: Object.assign({}, S().actual)
   });
   cur = scenarios.length - 1;
-  renderScenTabs(); render();
+  renderScenTabs(); render(); scheduleSave();
 }
 function renameScenario() {
   const n = prompt('Rename scenario:', S().name);
-  if (n) { S().name = n; renderScenTabs(); }
+  if (n) { S().name = n; renderScenTabs(); scheduleSave(); }
 }
 function deleteScenario() {
   if (scenarios.length <= 1) return;
   if (!confirm(`Delete "${S().name}"?`)) return;
   scenarios.splice(cur, 1);
   cur = Math.min(cur, scenarios.length - 1);
-  renderScenTabs(); render();
+  renderScenTabs(); render(); scheduleSave();
 }
 
 // ─────────────────────────────────────────────
@@ -815,12 +815,8 @@ function renderMatrix() {
   acs.forEach(c => {
     const alloc = clientAlloc(c.id);
     const tgt = targetHrs(c.id);
-    const diff = tgt !== null ? alloc - tgt : null;
     const cls = tgt !== null ? (alloc > tgt ? ' over' : ' under') : '';
-    const diffStr = diff !== null
-      ? `<span class="var-badge ${diff > 0 ? 'var-pos' : 'var-neg'}">${diff > 0 ? '+' : ''}${diff}</span>`
-      : '';
-    h += `<td class="val${cls}">${alloc}${diffStr}</td>`;
+    h += `<td class="val${cls}">${alloc}</td>`;
   });
   h += '</tr>';
 
@@ -1364,6 +1360,15 @@ function render() {
 renderScenTabs();
 render(); // initial render with defaults while sheets loads
 loadFromSheets(); // then load live data from Google Sheets
+
+// ── Tooltip positioning ──
+document.addEventListener('mousemove', function(e) {
+  const boxes = document.querySelectorAll('.tip-box');
+  boxes.forEach(box => {
+    box.style.left = (e.clientX + 12) + 'px';
+    box.style.top = (e.clientY + 12) + 'px';
+  });
+});
 </script>
 </body>
 </html>
