@@ -958,7 +958,7 @@ function renderOverview() {
     <div class="kpi${agencyGM < 20 ? ' danger' : ''}">
       <div class="kpi-label">True gross margin</div>
       <div class="kpi-value">${fmtPct(agencyGM)}</div>
-      <div class="kpi-sub">${agencyGM >>= MT()*100 ? '✓ Above' : '✗ Below'} ${Math.round(MT()*100)}% target</div>
+      <div class="kpi-sub">${agencyGM >= MT()*100 ? '✓ Above' : '✗ Below'} ${Math.round(MT()*100)}% target</div>
     </div>
     <div class="kpi${margin < 0 ? ' danger' : ''}">
       <div class="kpi-label">Billing margin</div>
