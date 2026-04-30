@@ -431,13 +431,13 @@
   .sheet-status.pending { background: var(--amber-bg); color: var(--amber); }
 
   /* ── Tooltips ── */
-  .rh-wrap { position: static; display: inline-flex; align-items: center; gap: 5px; cursor: default; }
+  .rh-wrap { display: inline-flex; align-items: center; gap: 5px; cursor: default; }
   .rh-wrap .tip-icon { font-size: 10px; color: var(--text-faint); border: 1px solid var(--border); border-radius: 50%; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: help; }
-  .rh-wrap .tip-box { display: none; position: fixed; width: 240px; background: var(--text); color: #fff; font-size: 11px; line-height: 1.5; padding: 8px 10px; border-radius: var(--radius); z-index: 9999; font-weight: 400; white-space: normal; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-  .rh-wrap:hover .tip-box { display: block; }
+  #global-tooltip { display: none; position: fixed; width: 240px; background: var(--text); color: #fff; font-size: 11px; line-height: 1.5; padding: 8px 10px; border-radius: var(--radius); z-index: 99999; font-weight: 400; white-space: normal; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
 </style>
 </head>
 <body>
+<div id="global-tooltip"></div>
 <div class="app">
 
   <header>
@@ -773,7 +773,7 @@ function renderMatrix() {
   h += '</tr></thead><tbody>';
 
   // Retainer row
-  h += `<tr class="tr-ret"><td class="rh"><span class=\"rh-wrap\">Retainer / mo<span class=\"tip-icon\">?</span><span class=\"tip-box\">Monthly revenue from this client. Edit directly here or in Setup → Clients.</span></span> <span style="font-weight:400;color:var(--text-faint);font-size:11px;">($${rate}/hr blended)</span></td>`;
+  h += `<tr class="tr-ret"><td class="rh"><span class=\"rh-wrap\" data-tip=\"Monthly revenue from this client. Edit directly here or in Setup → Clients.\">Retainer / mo<span class=\"tip-icon\">?</span></span> <span style="font-weight:400;color:var(--text-faint);font-size:11px;">($${rate}/hr blended)</span></td>`;
   h += `<td colspan="3" style="background:#fafaf8;"></td>`;
   acs.forEach(c => {
     if (!c.retainer) {
@@ -785,7 +785,7 @@ function renderMatrix() {
   h += '</tr>';
 
   // Target hours row
-  h += `<tr class="tr-tgt"><td class="rh"><span class=\"rh-wrap\">Target hrs<span class=\"tip-icon\">?</span><span class=\"tip-box\">Hours this retainer buys at the blended billing rate (Retainer ÷ Rate). The ceiling of work you can deliver before going over budget.</span></span> <span style="font-weight:400;font-size:11px;">retainer ÷ rate</span></td>`;
+  h += `<tr class="tr-tgt"><td class="rh"><span class=\"rh-wrap\" data-tip=\"Hours this retainer buys at the blended billing rate (Retainer ÷ Rate). The ceiling of work you can deliver before going over budget.\">Target hrs<span class=\"tip-icon\">?</span></span> <span style="font-weight:400;font-size:11px;">retainer ÷ rate</span></td>`;
   h += `<td colspan="3" style="background:var(--blue-bg);"></td>`;
   acs.forEach(c => {
     const tgt = targetHrs(c.id);
@@ -811,7 +811,7 @@ function renderMatrix() {
   });
 
   // Allocated total row
-  h += `<tr class="tr-tot"><td class="rh"><span class=\"rh-wrap\">Allocated total<span class=\"tip-icon\">?</span><span class=\"tip-box\">Hours we assign to staff for this client each month. Green = at or under target. Amber = over target.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-tot"><td class="rh"><span class=\"rh-wrap\" data-tip=\"Hours we assign to staff for this client each month. Green = at or under target. Amber = over target.\">Allocated total<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const alloc = clientAlloc(c.id);
     const tgt = targetHrs(c.id);
@@ -821,7 +821,7 @@ function renderMatrix() {
   h += '</tr>';
 
   // Actual paid hours
-  h += `<tr class="tr-actual"><td class="rh"><span class="rh-wrap">Actual paid hrs<span class="tip-icon">?</span><span class="tip-box">Hours the retainer covers at our billing rate (Retainer ÷ Rate). Updates automatically when the retainer changes.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-actual"><td class="rh"><span class="rh-wrap" data-tip="Hours the retainer covers at our billing rate (Retainer ÷ Rate). Updates automatically when the retainer changes.">Actual paid hrs<span class="tip-icon">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const v = actualPaidHrs(c.id);
     const cl = S().clients.find(x => x.id === c.id);
@@ -830,15 +830,15 @@ function renderMatrix() {
   h += '</tr>';
 
   // Burn rows
-  h += `<tr class="tr-burn"><td class="rh"><span class=\"rh-wrap\">Monthly burn (hrs)<span class=\"tip-icon\">?</span><span class=\"tip-box\">Actual paid hours minus allocated hours. Negative = over-servicing. Positive = capacity remaining.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh"><span class=\"rh-wrap\" data-tip=\"Actual paid hours minus allocated hours. Negative = over-servicing. Positive = capacity remaining.\">Monthly burn (hrs)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const b = burnHrs(c.id);
-    const cls = b > 0 ? 'neg' : 'pos';
+    const cls = b < 0 ? 'neg' : b > 0 ? 'pos' : '';
     h += `<td class="val ${cls}">${b > 0 ? '+' : ''}${b.toFixed(1)}</td>`;
   });
   h += '</tr>';
 
-  h += `<tr class="tr-burn"><td class="rh"><span class=\"rh-wrap\">Monthly burn ($)<span class=\"tip-icon\">?</span><span class=\"tip-box\">Retainer minus the cost of allocated hours at billing rate. Negative = spending more than the client pays.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh"><span class=\"rh-wrap\" data-tip=\"Retainer minus the cost of allocated hours at billing rate. Negative = spending more than the client pays.\">Monthly burn ($)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const cl = S().clients.find(x => x.id === c.id);
     const b = burnDol(c.id);
@@ -852,7 +852,7 @@ function renderMatrix() {
   });
   h += '</tr>';
 
-  h += `<tr class="tr-burn"><td class="rh"><span class=\"rh-wrap\">Monthly burn (%)<span class=\"tip-icon\">?</span><span class=\"tip-box\">Monthly burn in dollars as a percentage of the retainer.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh"><span class=\"rh-wrap\" data-tip=\"Monthly burn in dollars as a percentage of the retainer.\">Monthly burn (%)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const b = burnPct(c.id);
     if (b === null) { h += `<td class="val nil">—</td>`; return; }
@@ -861,7 +861,7 @@ function renderMatrix() {
   h += '</tr>';
 
   // ── Margin rows ──
-  h += `<tr class="tr-burn" style="border-top:2px solid var(--border-strong);"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\">True cost (loaded)<span class=\"tip-icon\">?</span><span class=\"tip-box\">Out-of-pocket cost of allocated hours — payroll plus 20% for taxes, benefits, and employer overhead.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn" style="border-top:2px solid var(--border-strong);"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"Out-of-pocket cost of allocated hours — payroll plus 20% for taxes, benefits, and employer overhead.\">True cost (loaded)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const cost = clientTrueCost(c.id);
     const cl = S().clients.find(x => x.id === c.id);
@@ -870,7 +870,7 @@ function renderMatrix() {
   });
   h += '</tr>';
 
-  h += `<tr class="tr-burn"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\">Gross margin<span class=\"tip-icon\">?</span><span class=\"tip-box\">Retainer minus true cost, as a percentage of the retainer. Target is 20% or above. Below zero means we are paying to work for this client.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"Retainer minus true cost, as a percentage of the retainer. Target is 20% or above. Below zero means we are paying to work for this client.\">Gross margin<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const gm = clientGrossMargin(c.id);
     if (gm === null) { h += `<td class="val nil">—</td>`; return; }
@@ -881,7 +881,7 @@ function renderMatrix() {
   });
   h += '</tr>';
 
-  h += `<tr class="tr-burn"><td class="rh" style="color:var(--blue);font-weight:600;"><span class=\"rh-wrap\">Target retainer (20%)<span class=\"tip-icon\">?</span><span class=\"tip-box\">What the retainer would need to be at current hours to hit exactly 20% gross margin.</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh" style="color:var(--blue);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"What the retainer would need to be at current hours to hit exactly 20% gross margin.\">Target retainer (20%)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const cl = S().clients.find(x => x.id === c.id);
     const tgt = clientTargetRetainer(c.id);
@@ -1361,14 +1361,40 @@ renderScenTabs();
 render(); // initial render with defaults while sheets loads
 loadFromSheets(); // then load live data from Google Sheets
 
-// ── Tooltip positioning ──
-document.addEventListener('mousemove', function(e) {
-  const boxes = document.querySelectorAll('.tip-box');
-  boxes.forEach(box => {
-    box.style.left = (e.clientX + 12) + 'px';
-    box.style.top = (e.clientY + 12) + 'px';
+// ── Global tooltip system ──
+(function() {
+  const tooltip = document.getElementById('global-tooltip');
+  let hideTimer = null;
+
+  document.addEventListener('mouseover', function(e) {
+    const icon = e.target.closest('.tip-icon');
+    if (!icon) return;
+    const wrap = icon.closest('.rh-wrap');
+    if (!wrap) return;
+    const text = wrap.getAttribute('data-tip');
+    if (!text) return;
+    clearTimeout(hideTimer);
+    tooltip.textContent = text;
+    tooltip.style.display = 'block';
   });
-});
+
+  document.addEventListener('mousemove', function(e) {
+    if (tooltip.style.display === 'block') {
+      let x = e.clientX + 14;
+      let y = e.clientY + 14;
+      if (x + 250 > window.innerWidth) x = e.clientX - 254;
+      if (y + 80 > window.innerHeight) y = e.clientY - 60;
+      tooltip.style.left = x + 'px';
+      tooltip.style.top = y + 'px';
+    }
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    const icon = e.target.closest('.tip-icon');
+    if (!icon) return;
+    hideTimer = setTimeout(() => { tooltip.style.display = 'none'; }, 100);
+  });
+})();
 </script>
 </body>
 </html>
