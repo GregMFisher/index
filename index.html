@@ -1114,6 +1114,29 @@ const BASE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/valu
 async function loadFromSheets() {
   showStatus('Loading from Google Sheets…', 'loading');
   try {
+    // First try to load full scenarios blob
+    const scenRes = await fetch(`${BASE_URL}/scenarios?key=${API_KEY}`);
+    const scenData = await scenRes.json();
+    const rows = (scenData.values || []).slice(1);
+
+    if (rows.length > 0 && rows[0][0]) {
+      // We have saved scenarios — restore them
+      try {
+        const saved = JSON.parse(rows[0][0]);
+        scenarios = saved.scenarios;
+        cur = saved.cur || 0;
+        nextSid = saved.nextSid || 20;
+        nextCid = saved.nextCid || 30;
+        renderScenTabs();
+        render();
+        showStatus('Loaded from Google Sheets', 'success');
+        return;
+      } catch(parseErr) {
+        console.warn('Scenarios parse failed, falling back to tab-by-tab load', parseErr);
+      }
+    }
+
+    // Fallback: load from individual tabs (first run or if scenarios tab is empty)
     const [staffRes, clientRes, allocRes, actualRes] = await Promise.all([
       fetch(`${BASE_URL}/staff?key=${API_KEY}`),
       fetch(`${BASE_URL}/clients?key=${API_KEY}`),
@@ -1127,7 +1150,7 @@ async function loadFromSheets() {
 
     // Parse staff (skip header row)
     const staff = (staffData.values || []).slice(1).map(r => ({
-      id: +r[0], name: r[1] || '', role: r[2] || '', hrs: +r[3] || 0, rate: +r[4] || 185
+      id: +r[0], name: r[1] || '', role: r[2] || '', hrs: +r[3] || 0, rate: +r[4] || 185, salary: +r[5] || 0
     })).filter(m => m.id);
 
     // Parse clients
@@ -1148,13 +1171,9 @@ async function loadFromSheets() {
       if (r[0]) actual[+r[0]] = +r[1] || 0;
     });
 
-    // Update current scenario with sheet data
-    scenarios[cur].staff = staff;
-    scenarios[cur].clients = clients;
-    scenarios[cur].alloc = alloc;
-    scenarios[cur].actual = actual;
-
-    // Update nextSid/nextCid
+    // Seed the Current scenario
+    scenarios[0] = { name: 'Current', staff, clients, alloc, actual };
+    cur = 0;
     nextSid = Math.max(...staff.map(m => m.id), nextSid) + 1;
     nextCid = Math.max(...clients.map(c => c.id), nextCid) + 1;
 
@@ -1187,27 +1206,39 @@ async function saveToSheets() {
   }
   showStatus('Saving…', 'loading');
   try {
+    // Save full scenarios blob to scenarios tab
+    const scenarioBlob = JSON.stringify({ scenarios, cur, nextSid, nextCid });
+    const scenarioValues = [['json'], [scenarioBlob]];
+
+    // Also keep individual tabs in sync with Current scenario for readability in Sheets
+    const currentScen = scenarios[0] || S();
     const staffValues = [
-      ['id','name','role','hrs','rate'],
-      ...S().staff.map(m => [m.id, m.name, m.role, m.hrs, m.rate])
+      ['id','name','role','hrs','rate','salary'],
+      ...currentScen.staff.map(m => [m.id, m.name, m.role, m.hrs, m.rate, m.salary || 0])
     ];
     const clientValues = [
       ['id','name','retainer','active'],
-      ...S().clients.map(c => [c.id, c.name, c.retainer, c.active ? 'TRUE' : 'FALSE'])
+      ...currentScen.clients.map(c => [c.id, c.name, c.retainer, c.active ? 'TRUE' : 'FALSE'])
     ];
     const allocValues = [['staff_id','client_id','hours']];
-    Object.entries(S().alloc).forEach(([k, v]) => {
+    Object.entries(currentScen.alloc).forEach(([k, v]) => {
       const [sid, cid] = k.split('_');
       if (+v > 0) allocValues.push([+sid, +cid, +v]);
     });
     const actualValues = [
       ['client_id','hours'],
-      ...Object.entries(S().actual).map(([cid, hrs]) => [+cid, +hrs || 0])
+      ...Object.entries(currentScen.actual).map(([cid, hrs]) => [+cid, +hrs || 0])
     ];
 
     const payload = {
       sheetId: SHEET_ID,
-      data: { staff: staffValues, clients: clientValues, alloc: allocValues, actual: actualValues }
+      data: {
+        scenarios: scenarioValues,
+        staff: staffValues,
+        clients: clientValues,
+        alloc: allocValues,
+        actual: actualValues
+      }
     };
 
     const res = await fetch(APPS_SCRIPT_URL, {
