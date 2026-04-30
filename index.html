@@ -1184,6 +1184,7 @@ async function loadFromSheets() {
   try {
     // First try to load full scenarios blob
     const scenRes = await fetch(`${BASE_URL}/scenarios?key=${API_KEY}`);
+    if (!scenRes.ok) throw new Error(`HTTP ${scenRes.status}`);
     const scenData = await scenRes.json();
     const rows = (scenData.values || []).slice(1);
 
@@ -1191,14 +1192,22 @@ async function loadFromSheets() {
       // We have saved scenarios — restore them
       try {
         const saved = JSON.parse(rows[0][0]);
-        scenarios = saved.scenarios;
-        cur = saved.cur || 0;
-        nextSid = saved.nextSid || 20;
-        nextCid = saved.nextCid || 30;
-        renderScenTabs();
-        render();
-        showStatus('Loaded from Google Sheets', 'success');
-        return;
+        // Only update if we got valid non-empty data
+        if (saved.scenarios && saved.scenarios.length > 0 && saved.scenarios[0].staff && saved.scenarios[0].staff.length > 0) {
+          scenarios = saved.scenarios;
+          cur = saved.cur || 0;
+          nextSid = saved.nextSid || 20;
+          nextCid = saved.nextCid || 30;
+          // Ensure overhead and marginTarget exist on all scenarios (backwards compat)
+          scenarios.forEach(s => {
+            if (!s.overhead) s.overhead = 0.35;
+            if (!s.marginTarget) s.marginTarget = 0.20;
+          });
+          renderScenTabs();
+          render();
+          showStatus('Loaded from Google Sheets', 'success');
+          return;
+        }
       } catch(parseErr) {
         console.warn('Scenarios parse failed, falling back to tab-by-tab load', parseErr);
       }
@@ -1239,6 +1248,13 @@ async function loadFromSheets() {
       if (r[0]) actual[+r[0]] = +r[1] || 0;
     });
 
+    // Only update if we got real data — never overwrite good data with empty
+    if (staff.length === 0 && clients.length === 0) {
+      showStatus('Sheet appears empty — keeping current data', 'pending');
+      render();
+      return;
+    }
+
     // Seed the Current scenario
     scenarios[0] = { name: 'Current', staff, clients, alloc, actual, marginTarget: 0.20, overhead: 0.35 };
     cur = 0;
@@ -1250,7 +1266,9 @@ async function loadFromSheets() {
     showStatus('Loaded from Google Sheets', 'success');
   } catch(e) {
     console.error(e);
-    showStatus('Failed to load from Sheets — check console', 'error');
+    // On failure keep existing data — never wipe what's already loaded
+    showStatus('Could not reach Sheets — showing last loaded data', 'pending');
+    render();
   }
 }
 
