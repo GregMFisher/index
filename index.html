@@ -527,6 +527,11 @@
         <input type="number" id="margin-target" value="20" min="1" max="99" step="1" onchange="setMarginTarget(+this.value)" style="width:60px;">
         <span>%</span>
         <span class="hint">— used for gross margin coloring and target retainer calculations.</span>
+        <span style="margin-left:20px;width:1px;background:var(--border);align-self:stretch;"></span>
+        <label style="margin-left:20px;">Employer overhead</label>
+        <input type="number" id="overhead-input" value="35" min="0" max="100" step="1" onchange="setOverhead(+this.value)" style="width:60px;">
+        <span>%</span>
+        <span class="hint">— employer taxes, health insurance, and benefits on top of salary.</span>
       </div>
       <div class="setup-grid" id="staff-setup-grid"></div>
       <button class="btn sm mt-8" onclick="addStaff()">+ Add person</button>
@@ -609,7 +614,8 @@ let scenarios = [{
   clients: deepCopy(BASE_CLIENTS),
   alloc: Object.assign({}, BASE_ALLOC),
   actual: Object.assign({}, BASE_ACTUAL),
-  marginTarget: 0.20
+  marginTarget: 0.20,
+  overhead: 0.35
 }];
 let cur = 0;
 let nextSid = 10, nextCid = 22;
@@ -626,14 +632,15 @@ function blendedRate() {
   return active.length ? Math.round(active.reduce((s, m) => s + m.rate, 0) / active.length) : 185;
 }
 // ── Cost & margin helpers ──
-const OVERHEAD = 0.20; // CA employer burden on payroll
+// Overhead rate is stored per-scenario in S().overhead
+const OV = () => S().overhead || 0.35;
 // Margin target is stored per-scenario in S().marginTarget
 const MT = () => S().marginTarget || 0.20;
 
 function staffHourlyCost(m) {
   // fully loaded hourly cost = (annual salary × (1+overhead)) / 12 / monthly hrs
   if (!m.hrs || !m.salary) return 0;
-  return (m.salary * (1 + OVERHEAD)) / 12 / m.hrs;
+  return (m.salary * (1 + OV())) / 12 / m.hrs;
 }
 function clientTrueCost(cid) {
   // sum of (hours × fully loaded hourly cost) across all staff
@@ -658,7 +665,7 @@ function totalAgencyCost() {
   // total fully loaded monthly cost across all staff (including unallocated time)
   return S().staff.reduce((sum, m) => {
     if (!m.salary) return sum;
-    return sum + (m.salary * (1 + OVERHEAD)) / 12;
+    return sum + (m.salary * (1 + OV())) / 12;
   }, 0);
 }
 function marginPillClass(pct) {
@@ -744,7 +751,8 @@ function cloneScenario() {
     clients: deepCopy(S().clients),
     alloc: Object.assign({}, S().alloc),
     actual: Object.assign({}, S().actual),
-    marginTarget: S().marginTarget || 0.20
+    marginTarget: S().marginTarget || 0.20,
+    overhead: S().overhead || 0.35
   });
   cur = scenarios.length - 1;
   renderScenTabs(); render(); scheduleSave();
@@ -868,7 +876,7 @@ function renderMatrix() {
   h += '</tr>';
 
   // ── Margin rows ──
-  h += `<tr class="tr-burn" style="border-top:2px solid var(--border-strong);"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"Out-of-pocket cost of allocated hours — payroll plus 20% for taxes, benefits, and employer overhead.\">True cost (loaded)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn" style="border-top:2px solid var(--border-strong);"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"Out-of-pocket cost of allocated hours — payroll plus your overhead rate (set in Setup) for taxes, health insurance, benefits, and employer overhead.\">True cost (loaded)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const cost = clientTrueCost(c.id);
     const cl = S().clients.find(x => x.id === c.id);
@@ -877,7 +885,7 @@ function renderMatrix() {
   });
   h += '</tr>';
 
-  h += `<tr class="tr-burn"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"Retainer minus true cost, as a percentage of the retainer. Target is 20% or above. Below zero means we are paying to work for this client.\">Gross margin<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh" style="color:var(--text);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"Retainer minus true cost, as a percentage of the retainer. Target is your profit margin target (set in Setup) or above. Below zero means we are paying to work for this client.\">Gross margin<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const gm = clientGrossMargin(c.id);
     if (gm === null) { h += `<td class="val nil">—</td>`; return; }
@@ -889,12 +897,12 @@ function renderMatrix() {
   });
   h += '</tr>';
 
-  h += `<tr class="tr-burn"><td class="rh" style="color:var(--blue);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"What the retainer would need to be at current hours to hit exactly 20% gross margin.\">Target retainer (${Math.round(MT()*100)}%)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
+  h += `<tr class="tr-burn"><td class="rh" style="color:var(--blue);font-weight:600;"><span class=\"rh-wrap\" data-tip=\"What the retainer would need to be at current hours to hit your profit margin target.\">Target retainer (${Math.round(MT()*100)}%)<span class=\"tip-icon\">?</span></span></td><td colspan="3"></td>`;
   acs.forEach(c => {
     const cl = S().clients.find(x => x.id === c.id);
     const tgt = clientTargetRetainer(c.id);
     if (!cl.retainer) {
-      // Zero-retainer: show what they'd need to charge for 20% margin
+      // Zero-retainer: show what they'd need to charge to hit the margin target
       const cost = clientTrueCost(c.id);
       if (cost > 0) {
         const needed = Math.round(cost / (1 - MT()));
@@ -949,7 +957,7 @@ function renderOverview() {
     <div class="kpi${agencyGM < 20 ? ' danger' : ''}">
       <div class="kpi-label">True gross margin</div>
       <div class="kpi-value">${fmtPct(agencyGM)}</div>
-      <div class="kpi-sub">${agencyGM >= 20 ? '✓ Above' : '✗ Below'} 20% target</div>
+      <div class="kpi-sub">${agencyGM >>= MT()*100 ? '✓ Above' : '✗ Below'} ${Math.round(MT()*100)}% target</div>
     </div>
     <div class="kpi${margin < 0 ? ' danger' : ''}">
       <div class="kpi-label">Billing margin</div>
@@ -1003,7 +1011,7 @@ function renderClients() {
       <th>True cost</th>
       <th>Gross margin</th>
       <th>Target retainer</th>
-      <th>Gap to 20%</th>
+      <th>Gap to ${Math.round(MT()*100)}%</th>
       <th>Target hrs</th>
       <th>Alloc</th>
       <th>Burn (%)</th>
@@ -1078,6 +1086,8 @@ function renderSetup() {
   if (gr) gr.value = blendedRate();
   const mt = document.getElementById('margin-target');
   if (mt) mt.value = Math.round((S().marginTarget || 0.20) * 100);
+  const ov = document.getElementById('overhead-input');
+  if (ov) ov.value = Math.round((S().overhead || 0.35) * 100);
 }
 
 // ─────────────────────────────────────────────
@@ -1153,6 +1163,11 @@ function setMarginTarget(pct) {
   S().marginTarget = Math.max(0.01, Math.min(0.99, pct / 100));
   render();
 }
+function setOverhead(pct) {
+  S().overhead = Math.max(0, Math.min(1.0, pct / 100));
+  scheduleSave();
+  render();
+}
 
 // ─────────────────────────────────────────────
 // GOOGLE SHEETS CONFIG
@@ -1225,7 +1240,7 @@ async function loadFromSheets() {
     });
 
     // Seed the Current scenario
-    scenarios[0] = { name: 'Current', staff, clients, alloc, actual };
+    scenarios[0] = { name: 'Current', staff, clients, alloc, actual, marginTarget: 0.20, overhead: 0.35 };
     cur = 0;
     nextSid = Math.max(...staff.map(m => m.id), nextSid) + 1;
     nextCid = Math.max(...clients.map(c => c.id), nextCid) + 1;
