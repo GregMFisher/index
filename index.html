@@ -1212,8 +1212,8 @@ async function loadFromTabs() {
     }
     const mt = (S().marginTarget) || 0.20;
     const ov = (S().overhead) || 0.35;
-    scenarios[0] = { name: 'Current', staff, clients, alloc, actual, marginTarget: mt, overhead: ov };
-    scenarios = [scenarios[0]]; // reset to single current scenario
+    const freshScenario = { name: 'Current', staff, clients, alloc, actual, marginTarget: mt, overhead: ov };
+    scenarios = [freshScenario]; // reset to single current scenario
     cur = 0;
     nextSid = Math.max(...staff.map(m => m.id), 9) + 1;
     nextCid = Math.max(...clients.map(c => c.id), 21) + 1;
