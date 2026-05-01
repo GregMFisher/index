@@ -434,6 +434,26 @@
   .rh-wrap { display: inline-flex; align-items: center; gap: 5px; cursor: default; }
   .rh-wrap .tip-icon { font-size: 10px; color: var(--text-faint); border: 1px solid var(--border); border-radius: 50%; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: help; }
   #global-tooltip { display: none; position: fixed; width: 240px; background: var(--text); color: #fff; font-size: 11px; line-height: 1.5; padding: 8px 10px; border-radius: var(--radius); z-index: 99999; font-weight: 400; white-space: normal; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+
+  /* ── Observations panel ── */
+  .obs-panel { margin-top: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; }
+  .obs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 12px; flex-wrap: wrap; }
+  .obs-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .obs-rules-toggle { font-size: 12px; color: var(--blue); cursor: pointer; background: none; border: none; font-family: var(--font); padding: 0; }
+  .obs-rules { display: none; background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
+  .obs-rules.open { display: block; }
+  .obs-rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+  .obs-rule-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); padding: 4px 0; }
+  .obs-rule-row label { flex: 1; }
+  .obs-rule-row input[type=number] { width: 56px; padding: 3px 6px; font-size: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-family: var(--font-mono); color: var(--text); }
+  .obs-rule-row input[type=text] { width: 120px; padding: 3px 6px; font-size: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-family: var(--font); color: var(--text); }
+  .obs-empty { font-size: 13px; color: var(--green); font-weight: 500; }
+  .obs-list { display: flex; flex-direction: column; gap: 6px; }
+  .obs-item { font-size: 13px; line-height: 1.5; padding: 8px 12px; border-radius: var(--radius); display: flex; align-items: flex-start; gap: 8px; }
+  .obs-item.warn  { background: var(--amber-bg); color: var(--amber); }
+  .obs-item.alert { background: var(--red-bg);   color: var(--red); }
+  .obs-item.info  { background: var(--blue-bg);  color: var(--blue); }
+  .obs-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -486,6 +506,18 @@
     </div>
     <div class="matrix-wrap">
       <div id="matrix-table"></div>
+    </div>
+
+    <!-- Observations panel -->
+    <div class="obs-panel">
+      <div class="obs-header">
+        <span class="obs-title">Key observations</span>
+        <button class="obs-rules-toggle" onclick="toggleRules()">⚙ Edit rules</button>
+      </div>
+      <div class="obs-rules" id="obs-rules-panel">
+        <div class="obs-rules-grid" id="obs-rules-grid"></div>
+      </div>
+      <div id="obs-list"></div>
     </div>
   </div>
 
@@ -616,7 +648,14 @@ let scenarios = [{
   alloc: Object.assign({}, BASE_ALLOC),
   actual: Object.assign({}, BASE_ACTUAL),
   marginTarget: 0.20,
-  overhead: 0.35
+  overhead: 0.35,
+  rules: {
+    dirMinAccts: 6, dirMaxAccts: 8,
+    mgrMinAccts: 4, mgrMaxAccts: 5,
+    dirHrs: 136, mgrHrs: 136,
+    seniorRoles: 'Comms Lead,Affiliate',
+    retainerThresholdForMgr: 5000
+  }
 }];
 let cur = 0;
 let nextSid = 10, nextCid = 22;
@@ -753,7 +792,8 @@ function cloneScenario() {
     alloc: Object.assign({}, S().alloc),
     actual: Object.assign({}, S().actual),
     marginTarget: S().marginTarget || 0.20,
-    overhead: S().overhead || 0.35
+    overhead: S().overhead || 0.35,
+    rules: Object.assign({}, S().rules || defaultRules())
   });
   cur = scenarios.length - 1;
   renderScenTabs(); render(); scheduleSave();
@@ -768,6 +808,138 @@ function deleteScenario() {
   scenarios.splice(cur, 1);
   cur = Math.min(cur, scenarios.length - 1);
   renderScenTabs(); render(); scheduleSave();
+}
+
+// ─────────────────────────────────────────────
+// RULES & OBSERVATIONS
+// ─────────────────────────────────────────────
+function defaultRules() {
+  return {
+    dirMinAccts: 6, dirMaxAccts: 8,
+    mgrMinAccts: 4, mgrMaxAccts: 5,
+    dirHrs: 136, mgrHrs: 136,
+    seniorRoles: 'Comms Lead,Affiliate',
+    retainerThresholdForMgr: 5000
+  };
+}
+
+function R() { return S().rules || defaultRules(); }
+
+function isSenior(m)    { return R().seniorRoles.split(',').map(r=>r.trim()).some(r => m.role.includes(r)); }
+function isDirector(m)  { return m.role.includes('Dir'); }
+function isManager(m)   { return m.role.includes('Mgr'); }
+
+function staffOnClient(cid) {
+  return S().staff.filter(m => (+S().alloc[ak(m.id, cid)] || 0) > 0);
+}
+function acctCountForStaff(sid) {
+  return activeClients().filter(c => c.retainer > 0 && (+S().alloc[ak(sid, c.id)] || 0) > 0).length;
+}
+
+function generateObservations() {
+  const obs = [];
+  const acs = activeClients().filter(c => c.retainer > 0);
+  const r = R();
+
+  // ── Staff load rules ──
+  S().staff.forEach(m => {
+    if (!m.hrs) return;
+    const accts = acctCountForStaff(m.id);
+    if (isDirector(m) && accts > r.dirMaxAccts) {
+      obs.push({ type: 'warn', text: `${m.name} has too many accounts (${accts}). Directors should have no more than ${r.dirMaxAccts}.` });
+    }
+    if (isDirector(m) && accts > 0 && accts < r.dirMinAccts) {
+      obs.push({ type: 'info', text: `${m.name} has fewer accounts than expected (${accts}). Directors typically handle ${r.dirMinAccts}–${r.dirMaxAccts}.` });
+    }
+    if (isManager(m) && accts > r.mgrMaxAccts) {
+      obs.push({ type: 'warn', text: `${m.name} has too many accounts (${accts}). Managers should have no more than ${r.mgrMaxAccts}.` });
+    }
+    if (isManager(m) && accts > 0 && accts < r.mgrMinAccts) {
+      obs.push({ type: 'info', text: `${m.name} has fewer accounts than expected (${accts}). Managers typically handle ${r.mgrMinAccts}–${r.mgrMaxAccts}.` });
+    }
+  });
+
+  // ── Per-client coverage rules ──
+  acs.forEach(c => {
+    const team = staffOnClient(c.id);
+    const hasSenior = team.some(m => isSenior(m));
+    const hasDir    = team.some(m => isDirector(m));
+    const hasMgr    = team.some(m => isManager(m));
+    const needsDir  = c.retainer > r.retainerThresholdForMgr; // only >$5k clients require a director
+
+    if (!hasSenior) {
+      const seniors = S().staff.filter(m => isSenior(m) && m.hrs > 0).map(m => m.name);
+      const seniorList = seniors.length > 1
+        ? seniors.slice(0,-1).join(', ') + ', or ' + seniors[seniors.length-1]
+        : seniors[0] || 'a senior lead';
+      obs.push({ type: 'alert', text: `${c.name} needs ${seniorList}.` });
+    }
+
+    if (needsDir && !hasDir) {
+      obs.push({ type: 'warn', text: `${c.name} is missing an account director (required for retainers over $${r.retainerThresholdForMgr.toLocaleString()}).` });
+    }
+
+    if (c.retainer > r.retainerThresholdForMgr && !hasMgr) {
+      obs.push({ type: 'warn', text: `${c.name} has a retainer over $${r.retainerThresholdForMgr.toLocaleString()} and should have an account manager.` });
+    }
+  });
+
+  // ── Capacity / hiring signal ──
+  const undeDir = S().staff.filter(m => isDirector(m) && m.hrs > 0 && acctCountForStaff(m.id) >= r.dirMaxAccts);
+  const undeMgr = S().staff.filter(m => isManager(m) && m.hrs > 0 && acctCountForStaff(m.id) >= r.mgrMaxAccts);
+  // Only flag director gaps for clients that actually require a director (retainer > threshold)
+  const clientsMissingDir = acs.filter(c => c.retainer > r.retainerThresholdForMgr && !staffOnClient(c.id).some(m => isDirector(m)));
+  const clientsMissingMgr = acs.filter(c => c.retainer > r.retainerThresholdForMgr && !staffOnClient(c.id).some(m => isManager(m)));
+
+  if (undeDir.length === S().staff.filter(m => isDirector(m) && m.hrs > 0).length && clientsMissingDir.length > 0) {
+    obs.push({ type: 'alert', text: `All account directors are at or near capacity. ${clientsMissingDir.length} client${clientsMissingDir.length > 1 ? 's are' : ' is'} without a director — consider hiring.` });
+  }
+  if (undeMgr.length === S().staff.filter(m => isManager(m) && m.hrs > 0).length && clientsMissingMgr.length > 0) {
+    obs.push({ type: 'alert', text: `All account managers are at or near capacity. ${clientsMissingMgr.length} client${clientsMissingMgr.length > 1 ? 's are' : ' is'} without a manager — consider hiring.` });
+  }
+
+  return obs;
+}
+
+function renderObservations() {
+  const obs = generateObservations();
+  const r = R();
+
+  // Render rules editor
+  const rulesHtml = `
+    <div class="obs-rules-grid">
+      <div class="obs-rule-row"><label>Director min accounts</label><input type="number" min="1" max="20" value="${r.dirMinAccts}" onchange="updRule('dirMinAccts',+this.value)"></div>
+      <div class="obs-rule-row"><label>Director max accounts</label><input type="number" min="1" max="20" value="${r.dirMaxAccts}" onchange="updRule('dirMaxAccts',+this.value)"></div>
+      <div class="obs-rule-row"><label>Manager min accounts</label><input type="number" min="1" max="20" value="${r.mgrMinAccts}" onchange="updRule('mgrMinAccts',+this.value)"></div>
+      <div class="obs-rule-row"><label>Manager max accounts</label><input type="number" min="1" max="20" value="${r.mgrMaxAccts}" onchange="updRule('mgrMaxAccts',+this.value)"></div>
+      <div class="obs-rule-row"><label>Retainer threshold for director &amp; manager ($)</label><input type="number" min="0" step="500" value="${r.retainerThresholdForMgr}" onchange="updRule('retainerThresholdForMgr',+this.value)"></div>
+      <div class="obs-rule-row"><label>Senior roles (comma-separated)</label><input type="text" value="${r.seniorRoles}" onchange="updRule('seniorRoles',this.value)" style="width:180px;"></div>
+    </div>`;
+  document.getElementById('obs-rules-panel').innerHTML = rulesHtml;
+
+  // Render observations
+  const listEl = document.getElementById('obs-list');
+  if (!listEl) return;
+  if (obs.length === 0) {
+    listEl.innerHTML = '<span class="obs-empty">✓ No issues detected based on current rules.</span>';
+    return;
+  }
+  const icons = { alert: '⚠', warn: '●', info: 'ℹ' };
+  listEl.innerHTML = '<div class="obs-list">' +
+    obs.map(o => `<div class="obs-item ${o.type}"><span class="obs-icon">${icons[o.type]}</span><span>${o.text}</span></div>`).join('') +
+    '</div>';
+}
+
+function updRule(key, val) {
+  if (!S().rules) S().rules = defaultRules();
+  S().rules[key] = val;
+  renderObservations();
+  scheduleSave();
+}
+
+function toggleRules() {
+  const el = document.getElementById('obs-rules-panel');
+  el.classList.toggle('open');
 }
 
 // ─────────────────────────────────────────────
@@ -800,14 +972,7 @@ function renderMatrix() {
   });
   h += '</tr>';
 
-  // Target hours row
-  h += `<tr class="tr-tgt"><td class="rh"><span class=\"rh-wrap\" data-tip=\"Hours this retainer buys at the blended billing rate (Retainer ÷ Rate). The ceiling of work you can deliver before going over budget.\">Target hrs<span class=\"tip-icon\">?</span></span> <span style="font-weight:400;font-size:11px;">retainer ÷ rate</span></td>`;
-  h += `<td colspan="3" style="background:var(--blue-bg);"></td>`;
-  acs.forEach(c => {
-    const tgt = targetHrs(c.id);
-    h += `<td class="val">${tgt !== null ? tgt : '—'}</td>`;
-  });
-  h += '</tr>';
+
 
   // Staff rows
   S().staff.forEach(m => {
@@ -1116,7 +1281,8 @@ function upStaff(id, key, val) {
 }
 function delStaff(id) {
   if (!confirm('Remove this person?')) return;
-  S().staff = S().staff.filter(x => x.id !== id);
+  const idx = S().staff.findIndex(x => x.id === id);
+  if (idx >= 0) S().staff.splice(idx, 1);
   scheduleSave();
   render();
 }
@@ -1139,7 +1305,8 @@ function upClient(id, key, val) {
 }
 function delClient(id) {
   if (!confirm('Remove this client?')) return;
-  S().clients = S().clients.filter(x => x.id !== id);
+  const idx = S().clients.findIndex(x => x.id === id);
+  if (idx >= 0) S().clients.splice(idx, 1);
   scheduleSave();
   render();
 }
@@ -1212,7 +1379,7 @@ async function loadFromTabs() {
     }
     const mt = (S().marginTarget) || 0.20;
     const ov = (S().overhead) || 0.35;
-    const freshScenario = { name: 'Current', staff, clients, alloc, actual, marginTarget: mt, overhead: ov };
+    const freshScenario = { name: 'Current', staff, clients, alloc, actual, marginTarget: mt, overhead: ov, rules: defaultRules() };
     scenarios = [freshScenario]; // reset to single current scenario
     cur = 0;
     nextSid = Math.max(...staff.map(m => m.id), 9) + 1;
@@ -1241,13 +1408,15 @@ async function loadFromSheets() {
         const saved = JSON.parse(rows[0][0]);
         if (saved.scenarios && saved.scenarios.length > 0 &&
             saved.scenarios[0].staff && saved.scenarios[0].staff.length > 0) {
-          scenarios = saved.scenarios;
+          // deepCopy ensures all objects are mutable (Safari freezes parsed JSON)
+          scenarios = deepCopy(saved.scenarios);
           cur = Math.min(saved.cur || 0, scenarios.length - 1);
           nextSid = saved.nextSid || 20;
           nextCid = saved.nextCid || 30;
           scenarios.forEach(s => {
             if (!s.overhead) s.overhead = 0.35;
             if (!s.marginTarget) s.marginTarget = 0.20;
+            if (!s.rules) s.rules = defaultRules();
           });
           renderScenTabs();
           render();
@@ -1271,6 +1440,14 @@ async function loadFromSheets() {
   }
 }
 
+
+// ── Debounced save ──
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToSheets, 1500);
+  showStatus('Unsaved changes…', 'pending');
+}
 
 async function saveToSheets() {
   if (!APPS_SCRIPT_URL) {
@@ -1355,7 +1532,7 @@ function exportData() {
 function importData() {
   try {
     const data = JSON.parse(document.getElementById('import-json').value);
-    scenarios = data.scenarios;
+    scenarios = deepCopy(data.scenarios);
     cur = data.cur || 0;
     nextSid = data.nextSid || 20;
     nextCid = data.nextCid || 30;
@@ -1383,6 +1560,7 @@ function showTab(t) {
 
 function render() {
   renderMatrix();
+  renderObservations();
   renderOverview();
   renderClients();
   renderSetup();
