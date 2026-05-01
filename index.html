@@ -467,6 +467,7 @@
     </div>
     <div class="header-actions" style="display:flex;align-items:center;gap:10px;">
       <span id="sheet-status" class="sheet-status success">Connected to Google Sheets</span>
+      <button class="btn sm primary" onclick="saveToSheets()" title="Save all data to Google Sheets now">↑ Save now</button>
       <button class="btn sm" onclick="loadFromSheets()">↺ Reload Sheet</button>
       <button class="btn sm" onclick="loadFromTabs()" title="Force reload from individual staff/clients/alloc/actual tabs, ignoring saved scenarios">↺ Reset from tabs</button>
       <button class="btn sm" onclick="exportData()">↓ Export JSON</button>
@@ -589,15 +590,15 @@
 function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
 const BASE_STAFF = [
-  {id:1, name:'Mark',      role:'Comms Lead', hrs:160, rate:185, salary:0},
-  {id:2, name:'Greg',      role:'Comms Lead', hrs:160, rate:185, salary:200000},
-  {id:3, name:'Garin',     role:'Affiliate',  hrs:160, rate:185, salary:150000},
-  {id:4, name:'Mackenzie', role:'Acct Dir',   hrs:136, rate:185, salary:100000},
-  {id:5, name:'TBD',       role:'Acct Dir',   hrs:0,   rate:185, salary:100000},
-  {id:6, name:'Holly',     role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
-  {id:7, name:'Andrew',    role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
-  {id:8, name:'Cody',      role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
-  {id:9, name:'John',      role:'Acct Mgr',   hrs:136, rate:185, salary:80000},
+  {id:1, name:'Mark',      role:'Comms Lead', hrs:160, rate:185, salary:0,      active:true},
+  {id:2, name:'Greg',      role:'Comms Lead', hrs:160, rate:185, salary:200000, active:true},
+  {id:3, name:'Garin',     role:'Affiliate',  hrs:160, rate:185, salary:150000, active:true},
+  {id:4, name:'Mackenzie', role:'Acct Dir',   hrs:136, rate:185, salary:100000, active:true},
+  {id:5, name:'TBD',       role:'Acct Dir',   hrs:0,   rate:185, salary:100000, active:true},
+  {id:6, name:'Holly',     role:'Acct Mgr',   hrs:136, rate:185, salary:80000, active:true},
+  {id:7, name:'Andrew',    role:'Acct Mgr',   hrs:136, rate:185, salary:80000, active:true},
+  {id:8, name:'Cody',      role:'Acct Mgr',   hrs:136, rate:185, salary:80000, active:true},
+  {id:9, name:'John',      role:'Acct Mgr',   hrs:136, rate:185, salary:80000, active:true},
 ];
 
 const BASE_CLIENTS = [
@@ -666,9 +667,10 @@ let nextSid = 10, nextCid = 22;
 const S = () => scenarios[cur];
 const ak = (sid, cid) => `${sid}_${cid}`;
 const activeClients = () => S().clients.filter(c => c.active);
+const activeStaff = () => S().staff.filter(m => m.active !== false);
 
 function blendedRate() {
-  const active = S().staff.filter(m => m.hrs > 0);
+  const active = activeStaff().filter(m => m.hrs > 0);
   return active.length ? Math.round(active.reduce((s, m) => s + m.rate, 0) / active.length) : 185;
 }
 // ── Cost & margin helpers ──
@@ -684,7 +686,7 @@ function staffHourlyCost(m) {
 }
 function clientTrueCost(cid) {
   // sum of (hours × fully loaded hourly cost) across all staff
-  return S().staff.reduce((sum, m) => {
+  return activeStaff().reduce((sum, m) => {
     const hrs = +S().alloc[ak(m.id, cid)] || 0;
     return sum + hrs * staffHourlyCost(m);
   }, 0);
@@ -703,7 +705,7 @@ function clientTargetRetainer(cid) {
 }
 function totalAgencyCost() {
   // total fully loaded monthly cost across all staff (including unallocated time)
-  return S().staff.reduce((sum, m) => {
+  return activeStaff().reduce((sum, m) => {
     if (!m.salary) return sum;
     return sum + (m.salary * (1 + OV())) / 12;
   }, 0);
@@ -817,6 +819,7 @@ function defaultRules() {
   return {
     dirMinAccts: 6, dirMaxAccts: 8,
     mgrMinAccts: 4, mgrMaxAccts: 5,
+    seniorMaxAccts: 12,
     dirHrs: 136, mgrHrs: 136,
     seniorRoles: 'Comms Lead,Affiliate',
     retainerThresholdForMgr: 5000
@@ -856,6 +859,9 @@ function generateObservations() {
     }
     if (isManager(m) && accts > 0 && accts < r.mgrMinAccts) {
       obs.push({ type: 'info', text: `${m.name} has fewer accounts than expected (${accts}). Managers typically handle ${r.mgrMinAccts}–${r.mgrMaxAccts}.` });
+    }
+    if (isSenior(m) && accts > r.seniorMaxAccts) {
+      obs.push({ type: 'warn', text: `${m.name} has ${accts} accounts — over the senior lead maximum of ${r.seniorMaxAccts}. Consider redistribution or a new hire.` });
     }
   });
 
@@ -913,6 +919,7 @@ function renderObservations() {
       <div class="obs-rule-row"><label>Manager min accounts</label><input type="number" min="1" max="20" value="${r.mgrMinAccts}" onchange="updRule('mgrMinAccts',+this.value)"></div>
       <div class="obs-rule-row"><label>Manager max accounts</label><input type="number" min="1" max="20" value="${r.mgrMaxAccts}" onchange="updRule('mgrMaxAccts',+this.value)"></div>
       <div class="obs-rule-row"><label>Retainer threshold for director &amp; manager ($)</label><input type="number" min="0" step="500" value="${r.retainerThresholdForMgr}" onchange="updRule('retainerThresholdForMgr',+this.value)"></div>
+      <div class="obs-rule-row"><label>Senior max accounts</label><input type="number" min="1" max="30" value="${r.seniorMaxAccts||12}" onchange="updRule('seniorMaxAccts',+this.value)"></div>
       <div class="obs-rule-row"><label>Senior roles (comma-separated)</label><input type="text" value="${r.seniorRoles}" onchange="updRule('seniorRoles',this.value)" style="width:180px;"></div>
     </div>`;
   document.getElementById('obs-rules-panel').innerHTML = rulesHtml;
@@ -974,8 +981,8 @@ function renderMatrix() {
 
 
 
-  // Staff rows
-  S().staff.forEach(m => {
+  // Staff rows (active staff only)
+  activeStaff().forEach(m => {
     const tot = staffAlloc(m.id);
     const pct = m.hrs > 0 ? tot / m.hrs * 100 : 0;
     const pcl = pillClass(pct);
@@ -1131,7 +1138,7 @@ function renderOverview() {
       <div class="kpi-sub">${fmtPct(marginPct)} of retainer</div>
     </div>`;
 
-  document.getElementById('staff-bars').innerHTML = S().staff.map(m => {
+  document.getElementById('staff-bars').innerHTML = activeStaff().map(m => {
     if (!m.hrs) return `<div class="bar-row"><div class="bar-label"><span class="bar-name" style="color:var(--text-muted);">${m.name}</span><span class="bar-meta">unassigned</span></div></div>`;
     const pct = allocPct(m.id);
     const col = loadColor(pct);
@@ -1216,32 +1223,39 @@ function renderClients() {
 // ─────────────────────────────────────────────
 function renderSetup() {
   // Staff
-  let sh = `<div class="setup-row header" style="grid-template-columns:1fr 75px 75px 90px 90px 28px;">
-    <span>Name / role</span><span>Hrs/mo</span><span>Rate ($/hr)</span><span>Salary/yr</span><span>Position</span><span></span>
+  let sh = `<div class="setup-row header" style="grid-template-columns:24px 1fr 75px 75px 90px 90px 70px 28px;">
+    <span></span><span>Name / role</span><span>Hrs/mo</span><span>Rate ($/hr)</span><span>Salary/yr</span><span>Position</span><span>Status</span><span></span>
   </div>`;
-  S().staff.forEach(m => {
-    sh += `<div class="setup-row" style="grid-template-columns:1fr 75px 75px 90px 90px 28px;">
+  S().staff.forEach((m, idx) => {
+    const isActive = m.active !== false;
+    sh += `<div class="setup-row" style="grid-template-columns:24px 1fr 75px 75px 90px 90px 70px 28px;opacity:${isActive?'1':'0.5'};">
+      <span class="drag-handle" draggable="true" ondragstart="dragStart(event,'staff',${idx})" ondragover="dragOver(event)" ondrop="dropItem(event,'staff',${idx})" style="cursor:grab;color:var(--text-faint);font-size:14px;display:flex;align-items:center;justify-content:center;">⠿</span>
       <input type="text" value="${m.name}" onchange="upStaff(${m.id},'name',this.value)" placeholder="Name">
       <input type="number" value="${m.hrs}" min="0" onchange="upStaff(${m.id},'hrs',+this.value)" placeholder="136">
       <input type="number" value="${m.rate}" min="1" onchange="upStaff(${m.id},'rate',+this.value)" placeholder="185">
       <input type="number" value="${m.salary||0}" min="0" step="1000" onchange="upStaff(${m.id},'salary',+this.value)" placeholder="80000">
       <input type="text" value="${m.role}" onchange="upStaff(${m.id},'role',this.value)" placeholder="Role">
+      <select onchange="upStaff(${m.id},'active',this.value==='true')">
+        <option value="true" ${isActive?'selected':''}>Active</option>
+        <option value="false" ${!isActive?'selected':''}>Inactive</option>
+      </select>
       <button class="del-btn" onclick="delStaff(${m.id})" title="Remove">×</button>
     </div>`;
   });
   document.getElementById('staff-setup-grid').innerHTML = sh;
 
   // Clients
-  let ch = `<div class="setup-row client-row header">
-    <span>Client name</span><span>Retainer/mo</span><span>Status</span><span></span>
+  let ch = `<div class="setup-row client-row header" style="grid-template-columns:24px 1fr 100px 80px 28px;">
+    <span></span><span>Client name</span><span>Retainer/mo</span><span>Status</span><span></span>
   </div>`;
-  S().clients.forEach(c => {
-    ch += `<div class="setup-row client-row">
+  S().clients.forEach((c, cidx) => {
+    ch += `<div class="setup-row client-row" style="grid-template-columns:24px 1fr 100px 80px 28px;">
+      <span class="drag-handle" draggable="true" ondragstart="dragStart(event,'client',${cidx})" ondragover="dragOver(event)" ondrop="dropItem(event,'client',${cidx})" style="cursor:grab;color:var(--text-faint);font-size:14px;display:flex;align-items:center;justify-content:center;">⠿</span>
       <input type="text" value="${c.name}" onchange="upClient(${c.id},'name',this.value)" placeholder="Client name">
       <input type="number" value="${c.retainer}" min="0" step="500" onchange="upClient(${c.id},'retainer',+this.value)" placeholder="5000">
       <select onchange="upClient(${c.id},'active',this.value==='true')">
-        <option value="true" ${c.active ? 'selected' : ''}>Active</option>
-        <option value="false" ${!c.active ? 'selected' : ''}>Inactive</option>
+        <option value="true" ${c.active?'selected':''}>Active</option>
+        <option value="false" ${!c.active?'selected':''}>Inactive</option>
       </select>
       <button class="del-btn" onclick="delClient(${c.id})" title="Remove">×</button>
     </div>`;
@@ -1343,6 +1357,7 @@ function setOverhead(pct) {
 const SHEET_ID = '1bE9Lq2HdDSCILkQnSUCf-vQlpUE8fsHDu4xSaucD3V4';
 const API_KEY  = 'AIzaSyAi2_lRmf0AsL7TAZ2cAc-hvfpcFQ-ZqIo';
 const BASE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values`;
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby9-oxxmnkvqmNXA9RHMgNwWJBBW0J9nORX64GR79MFPj2DpK3HcIlCd_TRSGfPBFrq/exec';
 
 // ─────────────────────────────────────────────
 // SHEETS READ
@@ -1607,6 +1622,31 @@ loadFromSheets(); // then load live data from Google Sheets
     hideTimer = setTimeout(() => { tooltip.style.display = 'none'; }, 100);
   });
 })();
+
+// ── Drag and drop reordering ──
+let dragSrc = null;
+let dragType = null;
+
+function dragStart(e, type, idx) {
+  dragSrc = idx;
+  dragType = type;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', idx);
+}
+function dragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+function dropItem(e, type, targetIdx) {
+  e.preventDefault();
+  if (dragType !== type || dragSrc === null || dragSrc === targetIdx) return;
+  const arr = type === 'staff' ? S().staff : S().clients;
+  const item = arr.splice(dragSrc, 1)[0];
+  arr.splice(targetIdx, 0, item);
+  dragSrc = null; dragType = null;
+  scheduleSave();
+  render();
+}
 </script>
 </body>
 </html>
